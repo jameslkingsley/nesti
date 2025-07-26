@@ -1,0 +1,15 @@
+[package]
+name = "nesti"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+example = ["dep:sysinfo"]
+
+[dependencies]
+crossterm = "0.27"
+parking_lot = "0.12"
+stanza = "0.5.2"
+num-format = "0.4.4"
+bytesize = "2.0.1"
+sysinfo = { version = "0.30", optional = true }
