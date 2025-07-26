@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use bytesize::ByteSize;
 use num_format::{Locale, ToFormattedString};
 use stanza::{
@@ -8,6 +10,7 @@ use stanza::{
 #[derive(Debug, Clone)]
 pub enum Content {
     Text(&'static str),
+    Stopwatch(i32),
     Integer(u64),
     IntegerUnit(u64, &'static str),
     Decimal(f64),
@@ -23,6 +26,7 @@ pub enum Content {
         maximum: u64,
         show_percent: bool,
         show_values: bool,
+        show_rate: bool,
     },
 }
 
@@ -42,13 +46,55 @@ impl From<&'static str> for StyledContent {
 }
 
 impl StyledContent {
-    pub(crate) fn to_cell(&self) -> Cell {
+    pub(crate) fn to_cell(&self, uptime: Duration, _delta: Duration) -> Cell {
         let (content, color) = (self.0.clone(), self.1.clone());
 
         let style = Styles::default().with(TextFg(color));
 
         let content = match content {
             Content::Text(text) => TableContent::Label(text.into()),
+            Content::Stopwatch(mask) => TableContent::Label({
+                if mask == 0b0001 {
+                    format!("{} ms", uptime.as_millis().to_formatted_string(&Locale::en))
+                } else {
+                    let total_millis = uptime.as_millis();
+                    let hours = (total_millis / 3_600_000) as u64;
+                    let minutes = ((total_millis % 3_600_000) / 60_000) as u64;
+                    let seconds = ((total_millis % 60_000) / 1000) as u64;
+                    let millis = (total_millis % 1000) as u64;
+
+                    let mut parts = Vec::with_capacity(4);
+
+                    if (mask & 0b1000) != 0 {
+                        parts.push(format!("{:02}", hours));
+                    }
+
+                    if (mask & 0b0100) != 0 {
+                        parts.push(format!("{:02}", minutes));
+                    }
+
+                    if (mask & 0b0010) != 0 {
+                        parts.push(format!("{:02}", seconds));
+                    }
+
+                    let millis_included = (mask & 0b0001) != 0;
+
+                    if millis_included {
+                        if parts.is_empty() {
+                            // Only millis selected
+                            parts.push(format!("{} ms", millis));
+                        } else {
+                            parts.push(format!("{:03}", millis));
+                        }
+                    }
+
+                    parts.join(if millis_included && parts.len() > 1 {
+                        "."
+                    } else {
+                        ":"
+                    })
+                }
+            }),
             Content::Integer(value) => TableContent::Label(value.to_formatted_string(&Locale::en)),
             Content::IntegerUnit(value, unit) => TableContent::Label(format!(
                 "{} {}",
@@ -70,6 +116,7 @@ impl StyledContent {
                 maximum,
                 show_percent,
                 show_values,
+                show_rate,
             } => {
                 let percentage = if maximum > 0 {
                     (current as f64 / maximum as f64) * 100.0
@@ -103,6 +150,18 @@ impl StyledContent {
                         current.to_formatted_string(&Locale::en),
                         maximum.to_formatted_string(&Locale::en)
                     ));
+                }
+
+                if show_rate {
+                    bar.push_str(&format!(" {:.2}/s", {
+                        let elapsed_secs = uptime.as_secs_f64();
+
+                        if elapsed_secs == 0.0 {
+                            0.0
+                        } else {
+                            current as f64 / elapsed_secs
+                        }
+                    }));
                 }
 
                 TableContent::Label(bar)

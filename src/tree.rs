@@ -1,4 +1,7 @@
-use std::io::{stderr, stdout, Result, Write};
+use std::{
+    io::{stderr, stdout, Result as IoResult, Write},
+    time::{Duration, Instant},
+};
 
 use parking_lot::RwLock;
 
@@ -13,7 +16,7 @@ use stanza::{
         console::{Console, Decor},
         Renderer as ConsoleRenderer,
     },
-    style::{HAlign, Palette16, Styles, TextFg},
+    style::{HAlign, MinWidth, Palette16, Styles, TextFg},
     table::{Cell, Col, Content as TableContent, Row, Table},
 };
 
@@ -23,11 +26,25 @@ const LINE_VERTICAL: &str = "│";
 const LINE_CORNER: &str = "└─ ";
 const LINE_JUNCTION: &str = "├─ ";
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Nesti {
     arena: RwLock<Vec<Node>>,
     roots: RwLock<Vec<usize>>,
     last_line_count: RwLock<usize>,
+    start: RwLock<Instant>,
+    delta: RwLock<Instant>,
+}
+
+impl Default for Nesti {
+    fn default() -> Self {
+        Self {
+            arena: RwLock::default(),
+            roots: RwLock::default(),
+            last_line_count: RwLock::default(),
+            start: RwLock::new(Instant::now()),
+            delta: RwLock::new(Instant::now()),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -70,7 +87,7 @@ pub enum Buffer {
 impl Default for OutputOptions {
     fn default() -> Self {
         OutputOptions {
-            refresh_rate: 128,
+            refresh_rate: 32,
             buffer: Buffer::Stdout,
             margin: Margin {
                 top: 1,
@@ -133,87 +150,85 @@ impl Nesti {
         arena[current_idx].content = Some(content.into());
     }
 
-    pub fn pop(&self, path: &str) -> Option<StyledContent> {
+    pub fn pop(&self, path: &str) {
         let path = path.as_bytes();
         let segments = self.split_path(path);
 
         if segments.is_empty() {
-            return None;
+            return;
         }
 
         let mut arena = self.arena.write();
         let mut roots = self.roots.write();
 
         // Find the root node
-        let root_idx = roots
+        match roots
             .iter()
-            .position(|&idx| arena[idx].segment == segments[0])?;
-        let root_node_idx = roots[root_idx];
-
-        if segments.len() == 1 {
-            // Removing a root node
-            let content = arena[root_node_idx].content.take();
-
-            // If the root has no content and no children, remove it entirely
-            if content.is_some() && arena[root_node_idx].children.is_empty() {
-                roots.remove(root_idx);
-            }
-
-            return content;
-        }
-
-        // Navigate to the target node and track the path
-        let mut path_indices = vec![root_node_idx];
-        let mut current_idx = root_node_idx;
-
-        for segment in segments.iter().skip(1) {
-            let child_idx = arena[current_idx]
-                .children
-                .iter()
-                .find(|&&child_idx| arena[child_idx].segment == *segment)
-                .copied();
-
-            match child_idx {
-                Some(idx) => {
-                    path_indices.push(idx);
-                    current_idx = idx;
-                }
-                None => return None,
-            }
-        }
-
-        // Remove content from the target node
-        let content = arena[current_idx].content.take();
-
-        // Clean up empty nodes from leaf to root
-        for i in (1..path_indices.len()).rev() {
-            let node_idx = path_indices[i];
-            let parent_idx = path_indices[i - 1];
-
-            // If node has no content and no children, remove it
-            if arena[node_idx].content.is_none() && arena[node_idx].children.is_empty() {
-                // Remove this node from its parent's children
-                arena[parent_idx]
-                    .children
-                    .retain(|&child| child != node_idx);
-            } else {
-                // Stop cleanup if we encounter a node that should remain
-                break;
-            }
-        }
-
-        // Check if root node should be removed
-        let root_idx_in_arena = path_indices[0];
-        if arena[root_idx_in_arena].content.is_none()
-            && arena[root_idx_in_arena].children.is_empty()
+            .position(|&idx| arena[idx].segment == segments[0])
         {
-            roots.remove(root_idx);
-        }
+            Some(root_idx) => {
+                let root_node_idx = roots[root_idx];
 
-        content
+                if segments.len() == 1 {
+                    roots.remove(root_idx);
+                    return;
+                }
+
+                // Navigate to the target node and track the path
+                let mut path_indices = vec![root_node_idx];
+                let mut current_idx = root_node_idx;
+
+                for segment in segments.iter().skip(1) {
+                    let child_idx = arena[current_idx]
+                        .children
+                        .iter()
+                        .find(|&&child_idx| arena[child_idx].segment == *segment)
+                        .copied();
+
+                    match child_idx {
+                        Some(idx) => {
+                            path_indices.push(idx);
+                            current_idx = idx;
+                        }
+                        None => return,
+                    }
+                }
+
+                // Clean up empty nodes from leaf to root
+                for i in (1..path_indices.len()).rev() {
+                    let node_idx = path_indices[i];
+                    let parent_idx = path_indices[i - 1];
+
+                    // If node has no content and no children, remove it
+                    if arena[node_idx].content.is_none() && arena[node_idx].children.is_empty() {
+                        // Remove this node from its parent's children
+                        arena[parent_idx]
+                            .children
+                            .retain(|&child| child != node_idx);
+                    } else {
+                        // Stop cleanup if we encounter a node that should remain
+                        break;
+                    }
+                }
+
+                // Check if root node should be removed
+                let root_idx_in_arena = path_indices[0];
+                if arena[root_idx_in_arena].content.is_none()
+                    && arena[root_idx_in_arena].children.is_empty()
+                {
+                    roots.remove(root_idx);
+                }
+            }
+            None => {}
+        }
     }
 
     pub fn render(&self, margin: &Margin) -> String {
+        let uptime = self.start.read().elapsed();
+        let mut delta = self.delta.write();
+        let delta_time = delta.elapsed();
+        *delta = Instant::now();
+
         let arena = self.arena.read();
         let roots = self.roots.read();
 
@@ -222,12 +237,22 @@ impl Nesti {
         }
 
         let mut main_table = Table::default().with_cols(vec![
-            Col::new(Styles::default().with(HAlign::Left)),
+            Col::new(Styles::default().with(HAlign::Left).with(MinWidth(20))),
             Col::new(Styles::default().with(HAlign::Right)),
         ]);
 
         for &root_idx in roots.iter() {
-            self.add_node_to_table(&arena, root_idx, 0, true, "", margin, &mut main_table);
+            self.add_node_to_table(
+                &arena,
+                root_idx,
+                0,
+                true,
+                "",
+                uptime,
+                delta_time,
+                margin,
+                &mut main_table,
+            );
         }
 
         let renderer = Console(Decor {
@@ -245,7 +270,7 @@ impl Nesti {
         )
     }
 
-    pub fn write_to_buffer(&self, opt: &OutputOptions) -> Result<()> {
+    pub fn write_to_buffer(&self, opt: &OutputOptions) -> IoResult<()> {
         let output = self.render(&opt.margin);
         let new_line_count = output.lines().count();
 
@@ -275,7 +300,7 @@ impl Nesti {
         move_cmd: Option<MoveUp>,
         clear_cmd: Clear,
         print_cmd: Print<String>,
-    ) -> Result<()> {
+    ) -> IoResult<()> {
         let mut stdout = stdout();
 
         if let Some(move_cmd) = move_cmd {
@@ -294,7 +319,7 @@ impl Nesti {
         move_cmd: Option<MoveUp>,
         clear_cmd: Clear,
         print_cmd: Print<String>,
-    ) -> Result<()> {
+    ) -> IoResult<()> {
         let mut stderr = stderr();
 
         if let Some(move_cmd) = move_cmd {
@@ -315,6 +340,8 @@ impl Nesti {
         depth: usize,
         is_last: bool,
         prefix: &str,
+        uptime: Duration,
+        delta: Duration,
         margin: &Margin,
         table: &mut Table,
     ) {
@@ -342,7 +369,7 @@ impl Nesti {
             vec![
                 Cell::new(Styles::default(), TableContent::Label(tree_prefix)),
                 match &node.content {
-                    Some(content) => content.to_cell(),
+                    Some(content) => content.to_cell(uptime, delta),
                     None => Cell::new(
                         Styles::default().with(TextFg(Palette16::Black)),
                         TableContent::Label(String::new()),
@@ -370,6 +397,8 @@ impl Nesti {
                 depth + 1,
                 is_last_child,
                 &child_prefix,
+                uptime,
+                delta,
                 margin,
                 table,
             );
