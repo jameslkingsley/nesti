@@ -20,7 +20,7 @@ use stanza::{
     table::{Cell, Col, Content as TableContent, Row, Table},
 };
 
-use crate::{content::*, Element};
+use crate::{style::StyledContent, elements::Element};
 
 const LINE_VERTICAL: &str = "│";
 const LINE_CORNER: &str = "└─ ";
@@ -63,7 +63,7 @@ struct Node {
 }
 
 impl Nesti {
-    pub fn put<T: Element>(&self, path: &str, element: T) {
+    pub fn put<T: Element<Context = ()>>(&self, path: &str, element: T) {
         let path = path.as_bytes();
         let segments = self.split_path(path);
 
@@ -111,7 +111,10 @@ impl Nesti {
             }
         }
 
-        arena[current_idx].content = Some(StyledContent(element.content(), element.styles()));
+        arena[current_idx].content = Some(StyledContent {
+            content: element.content(()),
+            styles: element.styles(()),
+        });
     }
 
     pub fn pop(&self, path: &str) {
@@ -333,7 +336,7 @@ impl Nesti {
             vec![
                 Cell::new(Styles::default(), TableContent::Label(tree_prefix)),
                 match &node.content {
-                    Some(content) => content.to_cell(uptime, delta),
+                    Some(content) => content.to_cell(),
                     None => Cell::new(
                         Styles::default().with(TextFg(Palette16::Black)),
                         TableContent::Label(String::new()),

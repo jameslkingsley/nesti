@@ -19,102 +19,175 @@ pub struct Decimal<T: FloatLike>(T);
 /// Display decimal with a specified unit.
 pub struct DecimalUnit<T: FloatLike, U: Into<String>>(T, U);
 
-trait IntegerLike {
-    fn primitive<T>(self) -> T {
+pub trait IntegerLike: Copy {
+    type Primitive: ToFormattedString;
+
+    fn primitive(self) -> Self::Primitive;
+}
+
+impl IntegerLike for i8 {
+    type Primitive = i8;
+    fn primitive(self) -> Self::Primitive {
+        self
+    }
+}
+impl IntegerLike for i16 {
+    type Primitive = i16;
+    fn primitive(self) -> Self::Primitive {
+        self
+    }
+}
+impl IntegerLike for i32 {
+    type Primitive = i32;
+    fn primitive(self) -> Self::Primitive {
+        self
+    }
+}
+impl IntegerLike for i64 {
+    type Primitive = i64;
+    fn primitive(self) -> Self::Primitive {
+        self
+    }
+}
+impl IntegerLike for i128 {
+    type Primitive = i128;
+    fn primitive(self) -> Self::Primitive {
+        self
+    }
+}
+impl IntegerLike for isize {
+    type Primitive = isize;
+    fn primitive(self) -> Self::Primitive {
+        self
+    }
+}
+impl IntegerLike for u8 {
+    type Primitive = u8;
+    fn primitive(self) -> Self::Primitive {
+        self
+    }
+}
+impl IntegerLike for u16 {
+    type Primitive = u16;
+    fn primitive(self) -> Self::Primitive {
+        self
+    }
+}
+impl IntegerLike for u32 {
+    type Primitive = u32;
+    fn primitive(self) -> Self::Primitive {
+        self
+    }
+}
+impl IntegerLike for u64 {
+    type Primitive = u64;
+    fn primitive(self) -> Self::Primitive {
+        self
+    }
+}
+impl IntegerLike for u128 {
+    type Primitive = u128;
+    fn primitive(self) -> Self::Primitive {
+        self
+    }
+}
+impl IntegerLike for usize {
+    type Primitive = usize;
+    fn primitive(self) -> Self::Primitive {
         self
     }
 }
 
-impl IntegerLike for i8 {}
-impl IntegerLike for i16 {}
-impl IntegerLike for i32 {}
-impl IntegerLike for i64 {}
-impl IntegerLike for i128 {}
-impl IntegerLike for isize {}
-impl IntegerLike for u8 {}
-impl IntegerLike for u16 {}
-impl IntegerLike for u32 {}
-impl IntegerLike for u64 {}
-impl IntegerLike for u128 {}
-impl IntegerLike for usize {}
-
 impl IntegerLike for NonZeroI8 {
-    fn primitive<T>(self) -> T {
+    type Primitive = i8;
+    fn primitive(self) -> Self::Primitive {
         self.get()
     }
 }
 impl IntegerLike for NonZeroI16 {
-    fn primitive<T>(self) -> T {
+    type Primitive = i16;
+    fn primitive(self) -> Self::Primitive {
         self.get()
     }
 }
 impl IntegerLike for NonZeroI32 {
-    fn primitive<T>(self) -> T {
-        self.get()
-    }
-}
-impl IntegerLike for NonZeroI64 {
-    fn primitive<T>(self) -> T {
-        self.get()
-    }
-}
-impl IntegerLike for NonZeroI128 {
-    fn primitive<T>(self) -> T {
-        self.get()
-    }
-}
-impl IntegerLike for NonZeroIsize {
-    fn primitive<T>(self) -> T {
-        self.get()
-    }
-}
-impl IntegerLike for NonZeroU8 {
-    fn primitive<T>(self) -> T {
-        self.get()
-    }
-}
-impl IntegerLike for NonZeroU16 {
-    fn primitive<T>(self) -> T {
-        self.get()
-    }
-}
-impl IntegerLike for NonZeroU32 {
-    fn primitive<T>(self) -> T {
-        self.get()
-    }
-}
-impl IntegerLike for NonZeroU64 {
-    fn primitive<T>(self) -> T {
-        self.get()
-    }
-}
-impl IntegerLike for NonZeroU128 {
-    fn primitive<T>(self) -> T {
-        self.get()
-    }
-}
-impl IntegerLike for NonZeroUsize {
-    fn primitive<T>(self) -> T {
+    type Primitive = i32;
+    fn primitive(self) -> Self::Primitive {
         self.get()
     }
 }
 
-trait FloatLike {}
+impl IntegerLike for NonZeroI64 {
+    type Primitive = i64;
+    fn primitive(self) -> Self::Primitive {
+        self.get()
+    }
+}
+impl IntegerLike for NonZeroI128 {
+    type Primitive = i128;
+    fn primitive(self) -> Self::Primitive {
+        self.get()
+    }
+}
+impl IntegerLike for NonZeroIsize {
+    type Primitive = isize;
+    fn primitive(self) -> Self::Primitive {
+        self.get()
+    }
+}
+impl IntegerLike for NonZeroU8 {
+    type Primitive = u8;
+    fn primitive(self) -> Self::Primitive {
+        self.get()
+    }
+}
+impl IntegerLike for NonZeroU16 {
+    type Primitive = u16;
+    fn primitive(self) -> Self::Primitive {
+        self.get()
+    }
+}
+impl IntegerLike for NonZeroU32 {
+    type Primitive = u32;
+    fn primitive(self) -> Self::Primitive {
+        self.get()
+    }
+}
+impl IntegerLike for NonZeroU64 {
+    type Primitive = u64;
+    fn primitive(self) -> Self::Primitive {
+        self.get()
+    }
+}
+impl IntegerLike for NonZeroU128 {
+    type Primitive = u128;
+    fn primitive(self) -> Self::Primitive {
+        self.get()
+    }
+}
+impl IntegerLike for NonZeroUsize {
+    type Primitive = usize;
+    fn primitive(self) -> Self::Primitive {
+        self.get()
+    }
+}
+
+pub trait FloatLike: std::fmt::Display {}
 impl FloatLike for f32 {}
 impl FloatLike for f64 {}
 
 impl<T: IntegerLike> Element for Integer<T> {
     type Context = ();
 
-    fn content(&self, ctx: Self::Context) -> String {
+    fn content(&self, _ctx: Self::Context) -> String {
         self.0.primitive().to_formatted_string(&Locale::en)
     }
 }
 
-impl<T: IntegerLike, U: Into<String>> Element for IntegerUnit<T, U> {
+impl<T: IntegerLike, U: Into<String> + std::fmt::Display> Element for IntegerUnit<T, U> {
     type Context = ();
 
-    fn content(&self, ctx: Self::Context) -> String {
+    fn content(&self, _ctx: Self::Context) -> String {
         format!(
             "{} {}",
             self.0.primitive().to_formatted_string(&Locale::en),
@@ -126,15 +199,15 @@ impl<T: IntegerLike, U: Into<String>> Element for IntegerUnit<T, U> {
 impl<T: FloatLike> Element for Decimal<T> {
     type Context = ();
 
-    fn content(&self, ctx: Self::Context) -> String {
+    fn content(&self, _ctx: Self::Context) -> String {
         format!("{:.2}", self.0)
     }
 }
 
-impl<T: FloatLike, U: Into<String>> Element for DecimalUnit<T, U> {
+impl<T: FloatLike, U: Into<String> + std::fmt::Display> Element for DecimalUnit<T, U> {
     type Context = ();
 
-    fn content(&self, ctx: Self::Context) -> String {
+    fn content(&self, _ctx: Self::Context) -> String {
         format!("{:.2} {}", self.0, self.1)
     }
 }

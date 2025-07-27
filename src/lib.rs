@@ -4,13 +4,11 @@ use std::{sync::LazyLock, thread::sleep, time::Duration};
 pub mod style;
 
 mod color;
-mod content;
 mod elements;
 mod stopwatch;
 mod tree;
 
 pub use crate::color::*;
-pub use crate::content::*;
 pub use crate::elements::*;
 pub use crate::tree::*;
 
@@ -20,7 +18,7 @@ static GLOBAL_NESTI: LazyLock<Nesti> = LazyLock::new(Nesti::default);
 
 pub fn nesti<T>(path: &str, content: T)
 where
-    T: Element,
+    T: Element<Context = ()>,
 {
     GLOBAL_NESTI.put(path, content);
 }
