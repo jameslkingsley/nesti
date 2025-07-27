@@ -26,6 +26,12 @@ const LINE_VERTICAL: &str = "│";
 const LINE_CORNER: &str = "└─ ";
 const LINE_JUNCTION: &str = "├─ ";
 
+#[derive(Debug, Clone, Copy)]
+pub enum Buffer {
+    Stdout,
+    Stderr,
+}
+
 #[derive(Debug)]
 pub struct Nesti {
     arena: RwLock<Vec<Node>>,
@@ -33,35 +39,6 @@ pub struct Nesti {
     last_line_count: RwLock<usize>,
     start: RwLock<Instant>,
     delta: RwLock<Instant>,
-}
-
-impl Default for Nesti {
-    fn default() -> Self {
-        Self {
-            arena: RwLock::default(),
-            roots: RwLock::default(),
-            last_line_count: RwLock::default(),
-            start: RwLock::new(Instant::now()),
-            delta: RwLock::new(Instant::now()),
-        }
-    }
-}
-
-#[derive(Debug)]
-struct Node {
-    segment: Vec<u8>,
-    content: Option<StyledContent>,
-    children: Vec<usize>,
-}
-
-impl Node {
-    fn new(segment: Vec<u8>) -> Self {
-        Self {
-            segment,
-            content: None,
-            children: Vec::new(),
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -78,28 +55,15 @@ pub struct Margin {
     pub left: usize,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum Buffer {
-    Stdout,
-    Stderr,
-}
-
-impl Default for OutputOptions {
-    fn default() -> Self {
-        OutputOptions {
-            refresh_rate: 32,
-            buffer: Buffer::Stdout,
-            margin: Margin {
-                top: 1,
-                bottom: 1,
-                left: 3,
-            },
-        }
-    }
+#[derive(Debug)]
+struct Node {
+    segment: Vec<u8>,
+    content: Option<StyledContent>,
+    children: Vec<usize>,
 }
 
 impl Nesti {
-    pub fn put<T: Into<StyledContent>>(&self, path: &str, content: T) {
+    pub fn put<T: Element>(&self, path: &str, element: T) {
         let path = path.as_bytes();
         let segments = self.split_path(path);
 
@@ -147,7 +111,7 @@ impl Nesti {
             }
         }
 
-        arena[current_idx].content = Some(content.into());
+        arena[current_idx].content = Some(StyledContent(element.content(), element.styles()));
     }
 
     pub fn pop(&self, path: &str) {
@@ -413,5 +377,41 @@ impl Nesti {
             .filter(|segment| !segment.is_empty())
             .map(|segment| segment.to_vec())
             .collect()
+    }
+}
+
+impl Node {
+    fn new(segment: Vec<u8>) -> Self {
+        Self {
+            segment,
+            content: None,
+            children: Vec::new(),
+        }
+    }
+}
+
+impl Default for Nesti {
+    fn default() -> Self {
+        Self {
+            arena: RwLock::default(),
+            roots: RwLock::default(),
+            last_line_count: RwLock::default(),
+            start: RwLock::new(Instant::now()),
+            delta: RwLock::new(Instant::now()),
+        }
+    }
+}
+
+impl Default for OutputOptions {
+    fn default() -> Self {
+        OutputOptions {
+            refresh_rate: 32,
+            buffer: Buffer::Stdout,
+            margin: Margin {
+                top: 1,
+                bottom: 1,
+                left: 3,
+            },
+        }
     }
 }

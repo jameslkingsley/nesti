@@ -1,19 +1,24 @@
 use std::io::Error;
 use std::{sync::LazyLock, thread::sleep, time::Duration};
 
+pub mod style;
+
 mod color;
 mod content;
+mod stopwatch;
 mod tree;
 
 pub use crate::color::*;
 pub use crate::content::*;
 pub use crate::tree::*;
 
+pub use humanize_duration::Truncate;
+
 static GLOBAL_NESTI: LazyLock<Nesti> = LazyLock::new(Nesti::default);
 
 pub fn nesti<T>(path: &str, content: T)
 where
-    T: Into<StyledContent>,
+    T: Element,
 {
     GLOBAL_NESTI.put(path, content);
 }

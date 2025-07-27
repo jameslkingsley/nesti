@@ -1,6 +1,8 @@
-use stanza::style::Palette16;
-
-use crate::{content::Content, StyledContent};
+use crate::{
+    content::Content,
+    style::{Palette16, TextFg},
+    Element, Styles,
+};
 
 #[derive(Debug, Clone)]
 pub enum Color {
@@ -47,27 +49,30 @@ impl Color {
     }
 }
 
-impl From<Color> for StyledContent {
-    fn from(color: Color) -> Self {
-        let palette = color.to_palette();
-        match color {
-            Color::None(content) => StyledContent(content, palette),
-            Color::Black(content) => StyledContent(content, palette),
-            Color::Red(content) => StyledContent(content, palette),
-            Color::Green(content) => StyledContent(content, palette),
-            Color::Yellow(content) => StyledContent(content, palette),
-            Color::Blue(content) => StyledContent(content, palette),
-            Color::Magenta(content) => StyledContent(content, palette),
-            Color::Cyan(content) => StyledContent(content, palette),
-            Color::White(content) => StyledContent(content, palette),
-            Color::BrightBlack(content) => StyledContent(content, palette),
-            Color::BrightRed(content) => StyledContent(content, palette),
-            Color::BrightGreen(content) => StyledContent(content, palette),
-            Color::BrightYellow(content) => StyledContent(content, palette),
-            Color::BrightBlue(content) => StyledContent(content, palette),
-            Color::BrightMagenta(content) => StyledContent(content, palette),
-            Color::BrightCyan(content) => StyledContent(content, palette),
-            Color::BrightWhite(content) => StyledContent(content, palette),
+impl Element for Color {
+    fn content(&self) -> Content {
+        match self {
+            Color::None(content)
+            | Color::Black(content)
+            | Color::Red(content)
+            | Color::Green(content)
+            | Color::Yellow(content)
+            | Color::Blue(content)
+            | Color::Magenta(content)
+            | Color::Cyan(content)
+            | Color::White(content)
+            | Color::BrightBlack(content)
+            | Color::BrightRed(content)
+            | Color::BrightGreen(content)
+            | Color::BrightYellow(content)
+            | Color::BrightBlue(content)
+            | Color::BrightMagenta(content)
+            | Color::BrightCyan(content)
+            | Color::BrightWhite(content) => content.to_owned(),
         }
+    }
+
+    fn styles(&self) -> Styles {
+        Styles::new().with(TextFg(self.to_palette()))
     }
 }
