@@ -20,7 +20,7 @@ use stanza::{
     table::{Cell, Col, Content as TableContent, Row, Table},
 };
 
-use crate::content::*;
+use crate::{content::*, Element};
 
 const LINE_VERTICAL: &str = "│";
 const LINE_CORNER: &str = "└─ ";

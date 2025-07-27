@@ -68,11 +68,6 @@ pub enum Content {
     },
 }
 
-pub trait Element {
-    fn content(&self) -> Content;
-    fn styles(&self) -> Styles;
-}
-
 impl StyledContent {
     pub(crate) fn to_cell(&self, uptime: Duration, delta: Duration) -> Cell {
         let (content, color) = (self.0.clone(), self.1.clone());

@@ -5,11 +5,13 @@ pub mod style;
 
 mod color;
 mod content;
+mod elements;
 mod stopwatch;
 mod tree;
 
 pub use crate::color::*;
 pub use crate::content::*;
+pub use crate::elements::*;
 pub use crate::tree::*;
 
 pub use humanize_duration::Truncate;
