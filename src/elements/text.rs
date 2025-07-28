@@ -1,11 +1,12 @@
 use super::Element;
 
+#[derive(Debug)]
 pub struct Text<T: Into<String>>(pub T);
 
 impl<T: Into<String> + Clone> Element for Text<T> {
     type Context = ();
 
-    fn content(&self, _ctx: Self::Context) -> String {
+    fn content(&self, _ctx: &Self::Context) -> String {
         self.0.clone().into()
     }
 }
@@ -13,7 +14,7 @@ impl<T: Into<String> + Clone> Element for Text<T> {
 impl Element for &str {
     type Context = ();
 
-    fn content(&self, _ctx: Self::Context) -> String {
+    fn content(&self, _ctx: &Self::Context) -> String {
         self.to_string()
     }
 }
@@ -21,7 +22,7 @@ impl Element for &str {
 impl Element for String {
     type Context = ();
 
-    fn content(&self, _ctx: Self::Context) -> String {
+    fn content(&self, _ctx: &Self::Context) -> String {
         self.to_owned()
     }
 }

@@ -1,6 +1,7 @@
 use super::style::Styles;
 
 mod bool;
+mod color;
 mod map;
 mod number;
 mod progress;
@@ -10,6 +11,7 @@ mod timer;
 mod vector;
 
 // pub use self::bool::*;
+pub use self::color::*;
 // pub use self::map::*;
 pub use self::number::*;
 pub use self::progress::*;
@@ -19,11 +21,11 @@ pub use self::timer::*;
 // pub use self::vector::*;
 
 pub trait Element {
-    type Context;
+    type Context: Default + Send + Sync + 'static;
 
-    fn content(&self, ctx: Self::Context) -> String;
+    fn content(&self, ctx: &Self::Context) -> String;
 
-    fn styles(&self, _ctx: Self::Context) -> Styles {
+    fn styles(&self) -> Styles {
         Styles::new()
     }
 }

@@ -1,25 +1,14 @@
 #[cfg(feature = "example")]
 mod system_info {
     use nesti::{
-        nesti, output_task,
-        Color::*,
-        Content::{self, *},
-        OutputOptions, StyledContent,
-        Truncate::*,
+        nesti, output_task, Bytes, Cyan, Integer, IntegerUnit, Magenta, OutputOptions, Progress,
+        Timer, Truncate::*, Yellow,
     };
     use std::{
         thread::{self, sleep},
         time::Duration,
     };
     use sysinfo::System;
-
-    struct Url(&'static str);
-
-    impl Into<StyledContent> for Url {
-        fn into(self) -> StyledContent {
-            StyledContent(Content::Text(format!("")), nesti::Palette16::Blue)
-        }
-    }
 
     pub fn main() -> Result<(), std::io::Error> {
         let _printer = thread::spawn(output_task(OutputOptions::default()));
@@ -31,19 +20,19 @@ mod system_info {
             sys.refresh_all();
             sys.refresh_cpu();
 
-            nesti("foo", Foo);
             nesti(
                 "system/counter",
                 Cyan(Progress {
                     current: counter,
                     maximum: 1000,
-                    show_percent: false,
+                    show_percent: true,
                     show_values: false,
-                    show_rate: true,
+                    show_rate: false,
                 }),
             );
 
-            nesti("system/uptime", Stopwatch(Nano));
+            nesti("system/uptime", Timer(Nano));
+            nesti("system/online", true);
             nesti("system/cpu/arch", "amd64");
             nesti(
                 "system/cpu/cores",

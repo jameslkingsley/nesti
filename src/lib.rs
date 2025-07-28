@@ -15,7 +15,8 @@ static GLOBAL_NESTI: LazyLock<Nesti> = LazyLock::new(Nesti::default);
 
 pub fn nesti<T>(path: &str, content: T)
 where
-    T: Element<Context = ()>,
+    T: Element + 'static + Send + Sync + std::fmt::Debug,
+    T::Context: Default + Send + Sync + 'static,
 {
     GLOBAL_NESTI.put(path, content);
 }

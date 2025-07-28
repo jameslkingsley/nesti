@@ -11,12 +11,12 @@ macro_rules! color_struct {
         impl<T: Element> Element for $name<T> {
             type Context = T::Context;
 
-            fn content(&self, ctx: Self::Context) -> String {
+            fn content(&self, ctx: &Self::Context) -> String {
                 self.0.content(ctx)
             }
 
-            fn styles(&self, ctx: Self::Context) -> Styles {
-                self.0.styles(ctx).with(TextFg($palette))
+            fn styles(&self) -> Styles {
+                self.0.styles().with(TextFg($palette))
             }
         }
     };

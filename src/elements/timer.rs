@@ -1,7 +1,4 @@
-use std::{
-    sync::LazyLock,
-    time::{Duration, Instant},
-};
+use std::time::Instant;
 
 use humanize_duration::{prelude::DurationExt, types::DurationParts, Formatter, Truncate, Unit};
 
@@ -82,11 +79,12 @@ unit!(Millis, "ms");
 unit!(Micro, "µs");
 unit!(Nano, "ns");
 
-pub struct Stopwatch(pub Truncate);
+#[derive(Debug)]
+pub struct Timer(pub Truncate);
 
-pub(crate) struct StopwatchFormatter;
+pub(crate) struct TimerFormatter;
 
-impl Formatter for StopwatchFormatter {
+impl Formatter for TimerFormatter {
     fn get(&self, truncate: Truncate) -> Box<dyn Unit> {
         match truncate {
             Truncate::Nano => Box::new(Nano),
@@ -111,17 +109,21 @@ impl Formatter for StopwatchFormatter {
     }
 }
 
-impl Element for Stopwatch {
-    type Context = LazyLock<Instant>;
+#[derive(Debug)]
+pub struct TimerContext(Instant);
 
-    fn content(&self, ctx: Self::Context) -> String {
-        let uptime = match *ctx {
-            Some(start) => start.elapsed(),
-            None => Duration::ZERO,
-        };
+impl Default for TimerContext {
+    fn default() -> Self {
+        TimerContext(Instant::now())
+    }
+}
 
-        uptime
-            .human_with_format(self.0, StopwatchFormatter)
-            .to_string()
+impl Element for Timer {
+    type Context = TimerContext;
+
+    fn content(&self, ctx: &Self::Context) -> String {
+        let uptime = ctx.0.elapsed();
+
+        uptime.human_with_format(self.0, TimerFormatter).to_string()
     }
 }

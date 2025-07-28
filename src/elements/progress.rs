@@ -1,9 +1,25 @@
-use std::time::Duration;
+use std::time::Instant;
 
 use num_format::{Locale, ToFormattedString};
 
 use super::Element;
 
+#[derive(Debug)]
+pub struct ProgressContext {
+    pub started: Option<Instant>,
+    pub initial_value: u64,
+}
+
+impl Default for ProgressContext {
+    fn default() -> Self {
+        Self {
+            started: Some(Instant::now()),
+            initial_value: 0,
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct Progress {
     pub current: u64,
     pub maximum: u64,
@@ -13,9 +29,9 @@ pub struct Progress {
 }
 
 impl Element for Progress {
-    type Context = Duration;
+    type Context = ProgressContext;
 
-    fn content(&self, uptime: Self::Context) -> String {
+    fn content(&self, ctx: &Self::Context) -> String {
         let percentage = if self.maximum > 0 {
             (self.current as f64 / self.maximum as f64) * 100.0
         } else {
@@ -51,15 +67,17 @@ impl Element for Progress {
         }
 
         if self.show_rate {
-            bar.push_str(&format!(" {:.2}/s", {
-                let elapsed_secs = uptime.as_secs_f64();
-
-                if elapsed_secs == 0.0 {
-                    0.0
+            let rate = if let Some(started) = ctx.started {
+                let elapsed = started.elapsed().as_secs_f64();
+                if elapsed > 0.0 {
+                    (self.current - ctx.initial_value) as f64 / elapsed
                 } else {
-                    self.current as f64 / elapsed_secs
+                    0.0
                 }
-            }));
+            } else {
+                0.0
+            };
+            bar.push_str(&format!(" {:.2}/s", rate));
         }
 
         bar

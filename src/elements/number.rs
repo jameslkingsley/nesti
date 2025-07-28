@@ -8,16 +8,20 @@ use num_format::{Locale, ToFormattedString};
 use super::Element;
 
 /// Display integer.
-pub struct Integer<T: IntegerLike>(T);
+#[derive(Debug)]
+pub struct Integer<T: IntegerLike>(pub T);
 
 /// Display integer with a specified unit.
-pub struct IntegerUnit<T: IntegerLike, U: Into<String>>(T, U);
+#[derive(Debug)]
+pub struct IntegerUnit<T: IntegerLike, U: Into<String>>(pub T, pub U);
 
 /// Display decimal.
-pub struct Decimal<T: FloatLike>(T);
+#[derive(Debug)]
+pub struct Decimal<T: FloatLike>(pub T);
 
 /// Display decimal with a specified unit.
-pub struct DecimalUnit<T: FloatLike, U: Into<String>>(T, U);
+#[derive(Debug)]
+pub struct DecimalUnit<T: FloatLike, U: Into<String>>(pub T, pub U);
 
 pub trait IntegerLike: Copy {
     type Primitive: ToFormattedString;
@@ -179,7 +183,7 @@ impl FloatLike for f64 {}
 impl<T: IntegerLike> Element for Integer<T> {
     type Context = ();
 
-    fn content(&self, _ctx: Self::Context) -> String {
+    fn content(&self, _ctx: &Self::Context) -> String {
         self.0.primitive().to_formatted_string(&Locale::en)
     }
 }
@@ -187,7 +191,7 @@ impl<T: IntegerLike> Element for Integer<T> {
 impl<T: IntegerLike, U: Into<String> + std::fmt::Display> Element for IntegerUnit<T, U> {
     type Context = ();
 
-    fn content(&self, _ctx: Self::Context) -> String {
+    fn content(&self, _ctx: &Self::Context) -> String {
         format!(
             "{} {}",
             self.0.primitive().to_formatted_string(&Locale::en),
@@ -199,7 +203,7 @@ impl<T: IntegerLike, U: Into<String> + std::fmt::Display> Element for IntegerUni
 impl<T: FloatLike> Element for Decimal<T> {
     type Context = ();
 
-    fn content(&self, _ctx: Self::Context) -> String {
+    fn content(&self, _ctx: &Self::Context) -> String {
         format!("{:.2}", self.0)
     }
 }
@@ -207,7 +211,7 @@ impl<T: FloatLike> Element for Decimal<T> {
 impl<T: FloatLike, U: Into<String> + std::fmt::Display> Element for DecimalUnit<T, U> {
     type Context = ();
 
-    fn content(&self, _ctx: Self::Context) -> String {
+    fn content(&self, _ctx: &Self::Context) -> String {
         format!("{:.2} {}", self.0, self.1)
     }
 }

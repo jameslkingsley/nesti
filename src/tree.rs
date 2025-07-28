@@ -1,6 +1,5 @@
 use std::{
     io::{stderr, stdout, Result as IoResult, Write},
-    sync::Arc,
     time::{Duration, Instant},
 };
 
@@ -17,11 +16,11 @@ use stanza::{
         console::{Console, Decor},
         Renderer as ConsoleRenderer,
     },
-    style::{HAlign, MinWidth, Palette16, Styles, TextFg},
+    style::{HAlign, MinWidth, Palette16, Styles as StanzaStyles, TextFg},
     table::{Cell, Col, Content as TableContent, Row, Table},
 };
 
-use crate::{elements::Element, style::StyledContent};
+use crate::{elements::Element, style::Styles};
 
 const LINE_VERTICAL: &str = "│";
 const LINE_CORNER: &str = "└─ ";
@@ -60,11 +59,16 @@ pub struct Margin {
 struct Node {
     segment: Vec<u8>,
     children: Vec<usize>,
-    content: Option<StyledContent>,
+    element: Option<Box<dyn DynElement>>,
+    context: Option<Box<dyn std::any::Any + Send + Sync>>,
 }
 
 impl Nesti {
-    pub fn put<T: Element<Context = ()>>(&self, path: &str, element: T) {
+    pub fn put<T: Element>(&self, path: &str, element: T)
+    where
+        T: 'static + Send + Sync + std::fmt::Debug,
+        T::Context: Default + Send + Sync + 'static,
+    {
         let path = path.as_bytes();
         let segments = self.split_path(path);
 
@@ -112,10 +116,12 @@ impl Nesti {
             }
         }
 
-        arena[current_idx].content = Some(StyledContent {
-            content: element.content(()),
-            styles: element.styles(()),
-        });
+        // Create context for this element
+        let context = Box::new(T::Context::default()) as Box<dyn std::any::Any + Send + Sync>;
+
+        // Store the element and its context
+        arena[current_idx].element = Some(Box::new(ElementWrapper(element)));
+        arena[current_idx].context = Some(context);
     }
 
     pub fn pop(&self, path: &str) {
@@ -168,7 +174,7 @@ impl Nesti {
                     let parent_idx = path_indices[i - 1];
 
                     // If node has no content and no children, remove it
-                    if arena[node_idx].content.is_none() && arena[node_idx].children.is_empty() {
+                    if arena[node_idx].element.is_none() && arena[node_idx].children.is_empty() {
                         // Remove this node from its parent's children
                         arena[parent_idx]
                             .children
@@ -181,7 +187,7 @@ impl Nesti {
 
                 // Check if root node should be removed
                 let root_idx_in_arena = path_indices[0];
-                if arena[root_idx_in_arena].content.is_none()
+                if arena[root_idx_in_arena].element.is_none()
                     && arena[root_idx_in_arena].children.is_empty()
                 {
                     roots.remove(root_idx);
@@ -205,8 +211,12 @@ impl Nesti {
         }
 
         let mut main_table = Table::default().with_cols(vec![
-            Col::new(Styles::default().with(HAlign::Left).with(MinWidth(20))),
-            Col::new(Styles::default().with(HAlign::Right)),
+            Col::new(
+                StanzaStyles::default()
+                    .with(HAlign::Left)
+                    .with(MinWidth(20)),
+            ),
+            Col::new(StanzaStyles::default().with(HAlign::Right)),
         ]);
 
         for &root_idx in roots.iter() {
@@ -263,6 +273,82 @@ impl Nesti {
         Ok(())
     }
 
+    fn add_node_to_table(
+        &self,
+        arena: &[Node],
+        node_idx: usize,
+        depth: usize,
+        is_last: bool,
+        prefix: &str,
+        uptime: Duration,
+        delta: Duration,
+        margin: &Margin,
+        table: &mut Table,
+    ) {
+        let node = &arena[node_idx];
+        let segment_str = String::from_utf8_lossy(&node.segment);
+
+        let tree_char = if depth == 0 {
+            ""
+        } else if is_last {
+            LINE_CORNER
+        } else {
+            LINE_JUNCTION
+        };
+
+        let tree_prefix = format!(
+            "{}{}{}{}",
+            " ".repeat(margin.left),
+            prefix,
+            tree_char,
+            segment_str
+        );
+
+        let row = Row::new(
+            StanzaStyles::default(),
+            vec![
+                Cell::new(StanzaStyles::default(), TableContent::Label(tree_prefix)),
+                match (&node.element, &node.context) {
+                    (Some(element), Some(context)) => {
+                        let content = element.content(context.as_ref());
+                        let styles = element.styles();
+                        Cell::new(styles.0.clone(), TableContent::Label(content))
+                    }
+                    _ => Cell::new(
+                        StanzaStyles::default().with(TextFg(Palette16::Black)),
+                        TableContent::Label(String::new()),
+                    ),
+                },
+            ],
+        );
+
+        table.push_row(row);
+
+        let child_prefix = if depth == 0 {
+            String::new()
+        } else if is_last {
+            format!("{}    ", prefix)
+        } else {
+            format!("{}{}   ", prefix, LINE_VERTICAL)
+        };
+
+        for (i, &child_idx) in node.children.iter().enumerate() {
+            let is_last_child = i == node.children.len() - 1;
+
+            self.add_node_to_table(
+                arena,
+                child_idx,
+                depth + 1,
+                is_last_child,
+                &child_prefix,
+                uptime,
+                delta,
+                margin,
+                table,
+            );
+        }
+    }
+
     fn write_to_stdout(
         &self,
         move_cmd: Option<MoveUp>,
@@ -301,78 +387,6 @@ impl Nesti {
         Ok(())
     }
 
-    fn add_node_to_table(
-        &self,
-        arena: &[Node],
-        node_idx: usize,
-        depth: usize,
-        is_last: bool,
-        prefix: &str,
-        uptime: Duration,
-        delta: Duration,
-        margin: &Margin,
-        table: &mut Table,
-    ) {
-        let node = &arena[node_idx];
-        let segment_str = String::from_utf8_lossy(&node.segment);
-
-        let tree_char = if depth == 0 {
-            ""
-        } else if is_last {
-            LINE_CORNER
-        } else {
-            LINE_JUNCTION
-        };
-
-        let tree_prefix = format!(
-            "{}{}{}{}",
-            " ".repeat(margin.left),
-            prefix,
-            tree_char,
-            segment_str
-        );
-
-        let row = Row::new(
-            Styles::default(),
-            vec![
-                Cell::new(Styles::default(), TableContent::Label(tree_prefix)),
-                match &node.content {
-                    Some(content) => content.to_cell(),
-                    None => Cell::new(
-                        Styles::default().with(TextFg(Palette16::Black)),
-                        TableContent::Label(String::new()),
-                    ),
-                },
-            ],
-        );
-
-        table.push_row(row);
-
-        let child_prefix = if depth == 0 {
-            String::new()
-        } else if is_last {
-            format!("{}    ", prefix)
-        } else {
-            format!("{}{}   ", prefix, LINE_VERTICAL)
-        };
-
-        for (i, &child_idx) in node.children.iter().enumerate() {
-            let is_last_child = i == node.children.len() - 1;
-
-            self.add_node_to_table(
-                arena,
-                child_idx,
-                depth + 1,
-                is_last_child,
-                &child_prefix,
-                uptime,
-                delta,
-                margin,
-                table,
-            );
-        }
-    }
-
     fn split_path(&self, path: &[u8]) -> Vec<Vec<u8>> {
         let end = path.iter().position(|&b| b == 0).unwrap_or(path.len());
         let path = &path[..end];
@@ -388,9 +402,41 @@ impl Node {
     fn new(segment: Vec<u8>) -> Self {
         Self {
             segment,
-            content: None,
+            element: None,
             children: Vec::new(),
+            context: None,
         }
+    }
+}
+
+// Type-erased element trait
+trait DynElement: Send + Sync + std::fmt::Debug {
+    fn content(&self, context: &dyn std::any::Any) -> String;
+    fn styles(&self) -> Styles;
+}
+
+// Wrapper to implement DynElement for any Element
+struct ElementWrapper<E: Element>(E);
+
+impl<E: Element + Send + Sync> DynElement for ElementWrapper<E>
+where
+    E::Context: 'static,
+{
+    fn content(&self, context: &dyn std::any::Any) -> String {
+        let ctx = context
+            .downcast_ref::<E::Context>()
+            .expect("Context type mismatch");
+        self.0.content(ctx)
+    }
+
+    fn styles(&self) -> Styles {
+        self.0.styles()
+    }
+}
+
+impl<E: Element + Send + Sync> std::fmt::Debug for ElementWrapper<E> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ElementWrapper").finish()
     }
 }
 
