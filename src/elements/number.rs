@@ -1,11 +1,15 @@
-use std::num::{
-    NonZeroI128, NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI8, NonZeroIsize, NonZeroU128,
-    NonZeroU16, NonZeroU32, NonZeroU64, NonZeroU8, NonZeroUsize,
+use std::{
+    fmt::Display,
+    num::{
+        NonZeroI128, NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI8, NonZeroIsize, NonZeroU128,
+        NonZeroU16, NonZeroU32, NonZeroU64, NonZeroU8, NonZeroUsize,
+    },
 };
 
+use bevy_ecs::world::EntityWorldMut;
 use num_format::{Locale, ToFormattedString};
 
-use super::Element;
+use super::{Content, Element, Style, Styles};
 
 /// Display integer.
 #[derive(Debug)]
@@ -13,7 +17,7 @@ pub struct Integer<T: IntegerLike>(pub T);
 
 /// Display integer with a specified unit.
 #[derive(Debug)]
-pub struct IntegerUnit<T: IntegerLike, U: Into<String>>(pub T, pub U);
+pub struct IntegerUnit<T: IntegerLike, U: Display>(pub T, pub U);
 
 /// Display decimal.
 #[derive(Debug)]
@@ -21,7 +25,7 @@ pub struct Decimal<T: FloatLike>(pub T);
 
 /// Display decimal with a specified unit.
 #[derive(Debug)]
-pub struct DecimalUnit<T: FloatLike, U: Into<String>>(pub T, pub U);
+pub struct DecimalUnit<T: FloatLike, U: Display>(pub T, pub U);
 
 pub trait IntegerLike: Copy {
     type Primitive: ToFormattedString;
@@ -181,37 +185,42 @@ impl FloatLike for f32 {}
 impl FloatLike for f64 {}
 
 impl<T: IntegerLike> Element for Integer<T> {
-    type Context = ();
-
-    fn content(&self, _ctx: &Self::Context, _global: &super::GlobalContext) -> String {
-        self.0.primitive().to_formatted_string(&Locale::en)
+    fn spawn(&self, entity: &mut EntityWorldMut, style_override: Option<Styles>) {
+        entity.insert(Content(self.0.primitive().to_formatted_string(&Locale::en)));
+        if let Some(style) = style_override {
+            entity.insert(Style(style));
+        }
     }
 }
 
-impl<T: IntegerLike, U: Into<String> + std::fmt::Display> Element for IntegerUnit<T, U> {
-    type Context = ();
-
-    fn content(&self, _ctx: &Self::Context, _global: &super::GlobalContext) -> String {
-        format!(
+impl<T: IntegerLike, U: Display> Element for IntegerUnit<T, U> {
+    fn spawn(&self, entity: &mut EntityWorldMut, style_override: Option<Styles>) {
+        entity.insert(Content(format!(
             "{} {}",
             self.0.primitive().to_formatted_string(&Locale::en),
             self.1
-        )
+        )));
+
+        if let Some(style) = style_override {
+            entity.insert(Style(style));
+        }
     }
 }
 
 impl<T: FloatLike> Element for Decimal<T> {
-    type Context = ();
-
-    fn content(&self, _ctx: &Self::Context, _global: &super::GlobalContext) -> String {
-        format!("{:.2}", self.0)
+    fn spawn(&self, entity: &mut EntityWorldMut, style_override: Option<Styles>) {
+        entity.insert(Content(format!("{:.2}", self.0)));
+        if let Some(style) = style_override {
+            entity.insert(Style(style));
+        }
     }
 }
 
-impl<T: FloatLike, U: Into<String> + std::fmt::Display> Element for DecimalUnit<T, U> {
-    type Context = ();
-
-    fn content(&self, _ctx: &Self::Context, _global: &super::GlobalContext) -> String {
-        format!("{:.2} {}", self.0, self.1)
+impl<T: FloatLike, U: Display> Element for DecimalUnit<T, U> {
+    fn spawn(&self, entity: &mut EntityWorldMut, style_override: Option<Styles>) {
+        entity.insert(Content(format!("{:.2} {}", self.0, self.1)));
+        if let Some(style) = style_override {
+            entity.insert(Style(style));
+        }
     }
 }

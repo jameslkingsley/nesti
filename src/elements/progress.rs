@@ -1,23 +1,7 @@
-use std::time::Instant;
-
+use bevy_ecs::world::EntityWorldMut;
 use num_format::{Locale, ToFormattedString};
 
-use super::Element;
-
-#[derive(Debug)]
-pub struct ProgressContext {
-    pub started: Option<Instant>,
-    pub initial_value: u64,
-}
-
-impl Default for ProgressContext {
-    fn default() -> Self {
-        Self {
-            started: Some(Instant::now()),
-            initial_value: 0,
-        }
-    }
-}
+use super::{Content, Element, Style, Styles};
 
 #[derive(Debug)]
 pub struct Progress {
@@ -29,9 +13,7 @@ pub struct Progress {
 }
 
 impl Element for Progress {
-    type Context = ProgressContext;
-
-    fn content(&self, ctx: &Self::Context, _global: &super::GlobalContext) -> String {
+    fn spawn(&self, entity: &mut EntityWorldMut, style_override: Option<Styles>) {
         let percentage = if self.maximum > 0 {
             (self.current as f64 / self.maximum as f64) * 100.0
         } else {
@@ -66,20 +48,23 @@ impl Element for Progress {
             ));
         }
 
-        if self.show_rate {
-            let rate = if let Some(started) = ctx.started {
-                let elapsed = started.elapsed().as_secs_f64();
-                if elapsed > 0.0 {
-                    (self.current - ctx.initial_value) as f64 / elapsed
-                } else {
-                    0.0
-                }
-            } else {
-                0.0
-            };
-            bar.push_str(&format!(" {rate:.2}/s"));
-        }
+        // if self.show_rate {
+        //     let rate = if let Some(started) = ctx.started {
+        //         let elapsed = started.elapsed().as_secs_f64();
+        //         if elapsed > 0.0 {
+        //             (self.current - ctx.initial_value) as f64 / elapsed
+        //         } else {
+        //             0.0
+        //         }
+        //     } else {
+        //         0.0
+        //     };
+        //     bar.push_str(&format!(" {rate:.2}/s"));
+        // }
 
-        bar
+        entity.insert(Content(bar));
+        if let Some(style) = style_override {
+            entity.insert(Style(style));
+        }
     }
 }

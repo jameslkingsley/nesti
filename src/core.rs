@@ -1,10 +1,8 @@
-#![allow(dead_code)]
-
 use std::{
     io::{stdout, Write},
     mem::take,
     ops::Deref,
-    sync::LazyLock,
+    sync::atomic::{AtomicUsize, Ordering},
 };
 
 use bevy_ecs::prelude::*;
@@ -26,8 +24,6 @@ use stanza::{
 
 use crate::style::Styles;
 
-static GLOBAL_NESTI: LazyLock<Nesti> = LazyLock::new(Nesti::default);
-
 const LINE_SPACE: &str = "   ";
 const LINE_VERTICAL: &str = "│";
 const LINE_CORNER: &str = "╰─ ";
@@ -37,6 +33,23 @@ const LINE_JUNCTION: &str = "├─ ";
 pub struct Nesti {
     world: RwLock<World>,
     last_line_count: RwLock<usize>,
+    insertion_counter: AtomicUsize,
+}
+
+#[derive(Component)]
+#[component(storage = "SparseSet")]
+pub struct Content(pub String);
+
+#[derive(Component, Default)]
+#[component(storage = "SparseSet")]
+pub struct Style(pub Styles);
+
+pub trait Element {
+    fn spawn(&self, entity: &mut EntityWorldMut, style_override: Option<Styles>);
+
+    fn tick(&self, entity: &mut EntityWorldMut, style_override: Option<Styles>) {
+        self.spawn(entity, style_override);
+    }
 }
 
 impl Nesti {
@@ -58,12 +71,12 @@ impl Nesti {
 
         if let Some(entity) = entity {
             // Entity already exists at path
-            world.despawn(entity);
-            let mut ent = world.spawn(Path(path));
-            element.spawn(&mut ent);
+            let mut ent = world.entity_mut(entity);
+            element.tick(&mut ent, None);
         } else {
-            let mut ent = world.spawn(Path(path));
-            element.spawn(&mut ent);
+            let insertion_order = self.insertion_counter.fetch_add(1, Ordering::SeqCst);
+            let mut ent = world.spawn((Path(path), InsertionOrder(insertion_order)));
+            element.spawn(&mut ent, None);
         }
     }
 
@@ -117,19 +130,18 @@ impl Nesti {
     }
 
     fn render(&self, world: &mut World) -> String {
-        let mut q = world.query::<(&Path, &Content, &Style)>();
+        let mut q = world.query::<(&Path, &Content, Option<&Style>, &InsertionOrder)>();
 
-        let mut rows: Vec<(Vec<&str>, &Content, &Style, usize)> = q
+        let mut rows: Vec<(Vec<&str>, &Content, Option<&Style>, usize)> = q
             .iter(&world)
-            .enumerate()
-            .map(|(index, (path, c, s))| {
+            .map(|(path, c, s, order)| {
                 (
                     path.split('/')
                         .filter(|s| !s.is_empty())
                         .collect::<Vec<_>>(),
                     c,
                     s,
-                    index,
+                    order.0,
                 )
             })
             .collect();
@@ -150,12 +162,16 @@ impl Nesti {
             &mut buffer,
         );
 
+        if table_rows.is_empty() {
+            return String::new();
+        }
+
         let table = Table::default()
             .with_cols(vec![
                 Col::new(
                     StanzaStyles::default()
                         .with(HAlign::Left)
-                        .with(MinWidth(20)),
+                        .with(MinWidth(30)),
                 ),
                 Col::new(StanzaStyles::default().with(HAlign::Right)),
             ])
@@ -178,11 +194,7 @@ struct Path(pub(crate) String);
 
 #[derive(Component)]
 #[component(storage = "SparseSet")]
-struct Content(pub String);
-
-#[derive(Component)]
-#[component(storage = "SparseSet")]
-struct Style(pub Styles);
+struct InsertionOrder(pub usize);
 
 impl Deref for Path {
     type Target = String;
@@ -192,27 +204,8 @@ impl Deref for Path {
     }
 }
 
-pub trait Element: Send + Sync {
-    fn spawn(&self, entity: &mut EntityWorldMut);
-}
-
-impl Element for () {
-    fn spawn(&self, entity: &mut EntityWorldMut) {
-        entity.insert(Content(String::new()));
-        entity.insert(Style(Styles::default()));
-    }
-}
-
-impl Element for &str {
-    fn spawn(&self, entity: &mut EntityWorldMut) {
-        entity.insert(Content(String::from(*self)));
-        entity.insert(Style(Styles::default()));
-    }
-}
-
-/// Renders rows[start..end) where all entries share the same prefix of length `depth`.
 fn render_range(
-    rows: &[(Vec<&str>, &Content, &Style, usize)],
+    rows: &[(Vec<&str>, &Content, Option<&Style>, usize)],
     start: usize,
     end: usize,
     depth: usize,
@@ -222,16 +215,13 @@ fn render_range(
 ) {
     let mut i = start;
     while i < end {
-        // Skip rows that don't reach this depth (already printed higher up)
         if rows[i].0.len() <= depth {
             i += 1;
             continue;
         }
 
-        // Safe now: len > depth
         let seg = rows[i].0[depth];
 
-        // Group all rows sharing this segment at this depth
         let mut j = i + 1;
         while j < end
             && rows[j].0.len() > depth
@@ -241,14 +231,12 @@ fn render_range(
             j += 1;
         }
 
-        // Determine if this group is the last sibling for its parent
         let mut k = j;
         while k < end && rows[k].0.len() <= depth {
             k += 1;
         }
         let is_last = k == end || rows[k].0[..depth] != rows[i].0[..depth];
 
-        // Connector
         let conn = if depth == 0 {
             ""
         } else if is_last {
@@ -258,10 +246,11 @@ fn render_range(
         };
 
         buffer.clear();
-
-        // Print current node
+        buffer.push_str("\x1b[90m");
+        buffer.push_str("   ");
         buffer.push_str(prefix);
         buffer.push_str(conn);
+        buffer.push_str("\x1b[0m");
         buffer.push_str(seg);
 
         let mut cells = Vec::with_capacity(2);
@@ -271,30 +260,29 @@ fn render_range(
             StanzaContent::Label(take(buffer)),
         ));
 
-        // If an entity ends exactly here, print its content
         if let Some(idx) = (i..j).find(|&idx| rows[idx].0.len() == depth + 1) {
             let (_, content, style, _) = &rows[idx];
             cells.push(Cell::new(
-                style.0 .0.clone(),
+                match style {
+                    Some(s) => s.0 .0.clone(),
+                    None => StanzaStyles::default(),
+                },
                 StanzaContent::Label(content.0.clone()),
             ));
         }
 
         out.push(Row::new(StanzaStyles::default(), cells));
 
-        // Prepare prefix for children
         let saved = prefix.len();
         if depth != 0 {
             if is_last {
                 prefix.push_str(LINE_SPACE);
             } else {
                 prefix.push_str(LINE_VERTICAL);
-                // pad to the width of CORNER/JUNCTION (3 chars after glyph)
                 prefix.push_str(&LINE_SPACE[..2]);
             }
         }
 
-        // Recurse if any child rows go deeper
         if rows[i..j].iter().any(|r| r.0.len() > depth + 1) {
             render_range(rows, i, j, depth + 1, prefix, out, buffer);
         }

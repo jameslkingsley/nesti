@@ -1,21 +1,20 @@
+use bevy_ecs::world::EntityWorldMut;
 use stanza::style::{Palette16, TextFg};
 
-use super::{Element, Styles};
+use super::{Content, Element, Style, Styles};
 
 impl Element for bool {
-    type Context = ();
+    fn spawn(&self, entity: &mut EntityWorldMut, style_override: Option<Styles>) {
+        entity.insert(Content(String::from(match self {
+            true => "●",
+            false => "○",
+        })));
 
-    fn content(&self, _ctx: &Self::Context, _global: &super::GlobalContext) -> String {
-        match self {
-            true => "●".to_string(),
-            false => "○".to_string(),
-        }
-    }
-
-    fn styles(&self) -> Styles {
-        Styles::new().with(TextFg(match self {
-            true => Palette16::Green,
-            false => Palette16::Red,
-        }))
+        entity.insert(Style(style_override.unwrap_or_else(|| {
+            Styles::new().with(TextFg(match self {
+                true => Palette16::Green,
+                false => Palette16::Red,
+            }))
+        })));
     }
 }

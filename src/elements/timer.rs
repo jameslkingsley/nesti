@@ -1,6 +1,12 @@
+use std::{
+    ops::Deref,
+    time::{Duration, Instant},
+};
+
+use bevy_ecs::{component::Component, world::EntityWorldMut};
 use humanize_duration::{prelude::DurationExt, types::DurationParts, Formatter, Truncate, Unit};
 
-use super::Element;
+use super::{Content, Element, Style, Styles};
 
 macro_rules! unit {
     ($unit_name:tt, $one:expr) => {
@@ -67,33 +73,44 @@ macro_rules! unit {
     };
 }
 
-unit!(Year, "year", "years");
-unit!(Month, "month", "months");
-unit!(Day, "day", "days");
-unit!(Hour, "h");
-unit!(Minute, "m");
-unit!(Second, "s");
-unit!(Millis, "ms");
-unit!(Micro, "µs");
-unit!(Nano, "ns");
+unit!(YearFormat, "year", "years");
+unit!(MonthFormat, "month", "months");
+unit!(DayFormat, "day", "days");
+unit!(HourFormat, "h");
+unit!(MinuteFormat, "m");
+unit!(SecondFormat, "s");
+unit!(MillisFormat, "ms");
+unit!(MicroFormat, "µs");
+unit!(NanoFormat, "ns");
 
 #[derive(Debug)]
 pub struct Timer(pub Truncate);
 
 pub(crate) struct TimerFormatter;
 
+#[derive(Component, Debug)]
+pub struct TimeComponent(Instant);
+
+impl Deref for TimeComponent {
+    type Target = Instant;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 impl Formatter for TimerFormatter {
     fn get(&self, truncate: Truncate) -> Box<dyn Unit> {
         match truncate {
-            Truncate::Nano => Box::new(Nano),
-            Truncate::Micro => Box::new(Micro),
-            Truncate::Millis => Box::new(Millis),
-            Truncate::Second => Box::new(Second),
-            Truncate::Minute => Box::new(Minute),
-            Truncate::Hour => Box::new(Hour),
-            Truncate::Day => Box::new(Day),
-            Truncate::Month => Box::new(Month),
-            Truncate::Year => Box::new(Year),
+            Truncate::Nano => Box::new(NanoFormat),
+            Truncate::Micro => Box::new(MicroFormat),
+            Truncate::Millis => Box::new(MillisFormat),
+            Truncate::Second => Box::new(SecondFormat),
+            Truncate::Minute => Box::new(MinuteFormat),
+            Truncate::Hour => Box::new(HourFormat),
+            Truncate::Day => Box::new(DayFormat),
+            Truncate::Month => Box::new(MonthFormat),
+            Truncate::Year => Box::new(YearFormat),
         }
     }
 
@@ -108,11 +125,35 @@ impl Formatter for TimerFormatter {
 }
 
 impl Element for Timer {
-    type Context = ();
+    fn spawn(&self, entity: &mut EntityWorldMut, style_override: Option<Styles>) {
+        if self.0 == Truncate::Millis {
+            println!("spawning timer");
+        }
+        entity.insert_if_new(TimeComponent(Instant::now()));
 
-    fn content(&self, _ctx: &Self::Context, global: &super::GlobalContext) -> String {
-        let uptime = global.start.elapsed();
+        entity.insert(Content(
+            Duration::ZERO
+                .human_with_format(self.0, TimerFormatter)
+                .to_string(),
+        ));
 
-        uptime.human_with_format(self.0, TimerFormatter).to_string()
+        if let Some(style) = style_override {
+            entity.insert(Style(style));
+        }
+    }
+
+    fn tick(&self, entity: &mut EntityWorldMut, style_override: Option<Styles>) {
+        if self.0 == Truncate::Millis {
+            println!("ticking timer");
+        }
+        if let Some(time_component) = entity.get::<TimeComponent>() {
+            let uptime = time_component.elapsed();
+            let content = uptime.human_with_format(self.0, TimerFormatter).to_string();
+            entity.insert(Content(content));
+        }
+
+        if let Some(style) = style_override {
+            entity.insert(Style(style));
+        }
     }
 }

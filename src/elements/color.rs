@@ -1,40 +1,40 @@
-use crate::{
-    elements::Element,
-    style::{Palette16, Styles, TextFg},
-};
+use crate::style::{Palette16, TextFg};
+use bevy_ecs::world::EntityWorldMut;
 
-macro_rules! color_struct {
+use super::{Element, Styles};
+
+macro_rules! color {
     ($name:ident, $palette:expr) => {
         #[derive(Debug, Clone)]
         pub struct $name<T: Element>(pub T);
 
         impl<T: Element> Element for $name<T> {
-            type Context = T::Context;
-
-            fn content(&self, ctx: &Self::Context, global: &super::GlobalContext) -> String {
-                self.0.content(ctx, global)
+            fn spawn(&self, entity: &mut EntityWorldMut, _style_override: Option<Styles>) {
+                self.0
+                    .spawn(entity, Some(Styles::new().with(TextFg($palette))));
             }
 
-            fn styles(&self) -> Styles {
-                self.0.styles().with(TextFg($palette))
+            fn tick(&self, entity: &mut EntityWorldMut, _style_override: Option<Styles>) {
+                self.0
+                    .tick(entity, Some(Styles::new().with(TextFg($palette))));
             }
         }
     };
 }
 
-color_struct!(Black, Palette16::Black);
-color_struct!(Red, Palette16::Red);
-color_struct!(Green, Palette16::Green);
-color_struct!(Yellow, Palette16::Yellow);
-color_struct!(Blue, Palette16::Blue);
-color_struct!(Magenta, Palette16::Magenta);
-color_struct!(Cyan, Palette16::Cyan);
-color_struct!(White, Palette16::White);
-color_struct!(BrightBlack, Palette16::BrightBlack);
-color_struct!(BrightRed, Palette16::BrightRed);
-color_struct!(BrightGreen, Palette16::BrightGreen);
-color_struct!(BrightYellow, Palette16::BrightYellow);
-color_struct!(BrightBlue, Palette16::BrightBlue);
-color_struct!(BrightMagenta, Palette16::BrightMagenta);
-color_struct!(BrightCyan, Palette16::BrightCyan);
-color_struct!(BrightWhite, Palette16::BrightWhite);
+color!(Black, Palette16::Black);
+color!(Red, Palette16::Red);
+color!(Green, Palette16::Green);
+color!(Yellow, Palette16::Yellow);
+color!(Blue, Palette16::Blue);
+color!(Magenta, Palette16::Magenta);
+color!(Cyan, Palette16::Cyan);
+color!(White, Palette16::White);
+color!(BrightBlack, Palette16::BrightBlack);
+color!(BrightRed, Palette16::BrightRed);
+color!(BrightGreen, Palette16::BrightGreen);
+color!(BrightYellow, Palette16::BrightYellow);
+color!(BrightBlue, Palette16::BrightBlue);
+color!(BrightMagenta, Palette16::BrightMagenta);
+color!(BrightCyan, Palette16::BrightCyan);
+color!(BrightWhite, Palette16::BrightWhite);

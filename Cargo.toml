@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-example = ["dep:sysinfo"]
+example = ["dep:sysinfo", "dep:rand"]
 
 [dependencies]
 crossterm = "0.27"
@@ -12,6 +12,7 @@ parking_lot = "0.12"
 stanza = "0.5.2"
 num-format = "0.4.4"
 bytesize = "2.0.1"
-sysinfo = { version = "0.30", optional = true }
 humanize-duration = "0.0.7"
 bevy_ecs = "0.16.1"
+sysinfo = { version = "0.30", optional = true }
+rand = { version = "0.9.2", optional = true }

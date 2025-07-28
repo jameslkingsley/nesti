@@ -1,28 +1,33 @@
-use super::Element;
+use bevy_ecs::world::EntityWorldMut;
+
+use super::{Content, Element, Style, Styles};
 
 #[derive(Debug)]
 pub struct Text<T: Into<String>>(pub T);
 
 impl<T: Into<String> + Clone> Element for Text<T> {
-    type Context = ();
-
-    fn content(&self, _ctx: &Self::Context, _global: &super::GlobalContext) -> String {
-        self.0.clone().into()
+    fn spawn(&self, entity: &mut EntityWorldMut, style_override: Option<Styles>) {
+        entity.insert(Content(self.0.clone().into()));
+        if let Some(style) = style_override {
+            entity.insert(Style(style));
+        }
     }
 }
 
 impl Element for &str {
-    type Context = ();
-
-    fn content(&self, _ctx: &Self::Context, _global: &super::GlobalContext) -> String {
-        self.to_string()
+    fn spawn(&self, entity: &mut EntityWorldMut, style_override: Option<Styles>) {
+        entity.insert(Content(self.to_string()));
+        if let Some(style) = style_override {
+            entity.insert(Style(style));
+        }
     }
 }
 
 impl Element for String {
-    type Context = ();
-
-    fn content(&self, _ctx: &Self::Context, _global: &super::GlobalContext) -> String {
-        self.to_owned()
+    fn spawn(&self, entity: &mut EntityWorldMut, style_override: Option<Styles>) {
+        entity.insert(Content(self.to_owned()));
+        if let Some(style) = style_override {
+            entity.insert(Style(style));
+        }
     }
 }

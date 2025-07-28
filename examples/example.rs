@@ -1,9 +1,11 @@
 #[cfg(feature = "example")]
 mod system_info {
+    use humanize_duration::Truncate::Millis;
     use nesti::{
-        nesti, output_task, Bytes, Cyan, Integer, IntegerUnit, Magenta, OutputOptions, Progress,
-        Timer, Truncate::*, Yellow,
+        nesti, nesti_task, Bytes, Cyan, Integer, IntegerUnit, Magenta, Nano, Progress, Timer,
+        Yellow,
     };
+    use rand::{rng, Rng};
     use std::{
         thread::{self, sleep},
         time::Duration,
@@ -11,25 +13,21 @@ mod system_info {
     use sysinfo::System;
 
     pub fn main() -> Result<(), std::io::Error> {
-        let _printer = thread::spawn(output_task(OutputOptions::default()));
+        let _task = thread::spawn(nesti_task);
 
         let mut sys = System::new_all();
-        let mut counter = 0;
+        let mut rng = rng();
+        let mut timers = 0;
 
         loop {
             sys.refresh_all();
             sys.refresh_cpu();
 
-            nesti(
-                "system/counter",
-                Cyan(Progress {
-                    current: counter,
-                    maximum: 1000,
-                    show_percent: true,
-                    show_values: false,
-                    show_rate: false,
-                }),
-            );
+            if timers < 5 && rng.random_bool(0.2) {
+                let key: u16 = rng.random();
+                nesti(format!("system/timers/{}", key), Timer(Millis));
+                timers += 1;
+            }
 
             nesti("system/uptime", Timer(Nano));
             nesti("system/online", true);
@@ -60,8 +58,6 @@ mod system_info {
             nesti("processes/total", Integer(process_count));
 
             sleep(Duration::from_millis(100));
-
-            counter += 1;
         }
     }
 }
