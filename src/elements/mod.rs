@@ -30,3 +30,34 @@ pub trait Element {
         Styles::new()
     }
 }
+
+// Type-erased element trait
+pub(crate) trait DynElement: Send + Sync + std::fmt::Debug {
+    fn content(&self, context: &dyn std::any::Any, global: &GlobalContext) -> String;
+    fn styles(&self) -> Styles;
+}
+
+// Wrapper to implement DynElement for any Element
+pub(crate) struct ElementWrapper<E: Element>(pub(crate) E);
+
+impl<E: Element + Send + Sync> DynElement for ElementWrapper<E>
+where
+    E::Context: 'static,
+{
+    fn content(&self, context: &dyn std::any::Any, global: &GlobalContext) -> String {
+        let ctx = context
+            .downcast_ref::<E::Context>()
+            .expect("Context type mismatch");
+        self.0.content(ctx, global)
+    }
+
+    fn styles(&self) -> Styles {
+        self.0.styles()
+    }
+}
+
+impl<E: Element + Send + Sync> std::fmt::Debug for ElementWrapper<E> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ElementWrapper").finish()
+    }
+}

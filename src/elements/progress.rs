@@ -55,7 +55,7 @@ impl Element for Progress {
         }
 
         if self.show_percent {
-            bar.push_str(&format!(" {:.1}%", percentage));
+            bar.push_str(&format!(" {percentage:.1}%"));
         }
 
         if self.show_values {
@@ -77,7 +77,7 @@ impl Element for Progress {
             } else {
                 0.0
             };
-            bar.push_str(&format!(" {:.2}/s", rate));
+            bar.push_str(&format!(" {rate:.2}/s"));
         }
 
         bar

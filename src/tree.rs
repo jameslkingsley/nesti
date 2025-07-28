@@ -20,7 +20,7 @@ use stanza::{
     table::{Cell, Col, Content as TableContent, Row, Table},
 };
 
-use crate::{elements::Element, style::Styles};
+use crate::elements::{DynElement, Element, ElementWrapper};
 
 const LINE_VERTICAL: &str = "│";
 const LINE_CORNER: &str = "└─ ";
@@ -69,9 +69,9 @@ struct Node {
 }
 
 impl Nesti {
-    pub fn put<T: Element>(&self, path: &str, element: T)
+    pub fn put<T>(&self, path: &str, element: T)
     where
-        T: 'static + Send + Sync + std::fmt::Debug,
+        T: Element + 'static + Send + Sync + std::fmt::Debug,
         T::Context: Default + Send + Sync + 'static,
     {
         let path = path.as_bytes();
@@ -141,64 +141,61 @@ impl Nesti {
         let mut roots = self.roots.write();
 
         // Find the root node
-        match roots
+        if let Some(root_idx) = roots
             .iter()
             .position(|&idx| arena[idx].segment == segments[0])
         {
-            Some(root_idx) => {
-                let root_node_idx = roots[root_idx];
+            let root_node_idx = roots[root_idx];
 
-                if segments.len() == 1 {
-                    roots.remove(root_idx);
-                    return;
-                }
+            if segments.len() == 1 {
+                roots.remove(root_idx);
+                return;
+            }
 
-                // Navigate to the target node and track the path
-                let mut path_indices = vec![root_node_idx];
-                let mut current_idx = root_node_idx;
+            // Navigate to the target node and track the path
+            let mut path_indices = vec![root_node_idx];
+            let mut current_idx = root_node_idx;
 
-                for segment in segments.iter().skip(1) {
-                    let child_idx = arena[current_idx]
-                        .children
-                        .iter()
-                        .find(|&&child_idx| arena[child_idx].segment == *segment)
-                        .copied();
+            for segment in segments.iter().skip(1) {
+                let child_idx = arena[current_idx]
+                    .children
+                    .iter()
+                    .find(|&&child_idx| arena[child_idx].segment == *segment)
+                    .copied();
 
-                    match child_idx {
-                        Some(idx) => {
-                            path_indices.push(idx);
-                            current_idx = idx;
-                        }
-                        None => return,
+                match child_idx {
+                    Some(idx) => {
+                        path_indices.push(idx);
+                        current_idx = idx;
                     }
-                }
-
-                // Clean up empty nodes from leaf to root
-                for i in (1..path_indices.len()).rev() {
-                    let node_idx = path_indices[i];
-                    let parent_idx = path_indices[i - 1];
-
-                    // If node has no content and no children, remove it
-                    if arena[node_idx].element.is_none() && arena[node_idx].children.is_empty() {
-                        // Remove this node from its parent's children
-                        arena[parent_idx]
-                            .children
-                            .retain(|&child| child != node_idx);
-                    } else {
-                        // Stop cleanup if we encounter a node that should remain
-                        break;
-                    }
-                }
-
-                // Check if root node should be removed
-                let root_idx_in_arena = path_indices[0];
-                if arena[root_idx_in_arena].element.is_none()
-                    && arena[root_idx_in_arena].children.is_empty()
-                {
-                    roots.remove(root_idx);
+                    None => return,
                 }
             }
-            None => {}
+
+            // Clean up empty nodes from leaf to root
+            for i in (1..path_indices.len()).rev() {
+                let node_idx = path_indices[i];
+                let parent_idx = path_indices[i - 1];
+
+                // If node has no content and no children, remove it
+                if arena[node_idx].element.is_none() && arena[node_idx].children.is_empty() {
+                    // Remove this node from its parent's children
+                    arena[parent_idx]
+                        .children
+                        .retain(|&child| child != node_idx);
+                } else {
+                    // Stop cleanup if we encounter a node that should remain
+                    break;
+                }
+            }
+
+            // Check if root node should be removed
+            let root_idx_in_arena = path_indices[0];
+            if arena[root_idx_in_arena].element.is_none()
+                && arena[root_idx_in_arena].children.is_empty()
+            {
+                roots.remove(root_idx);
+            }
         }
     }
 
@@ -222,13 +219,13 @@ impl Nesti {
         ]);
 
         for &root_idx in roots.iter() {
-            self.add_node_to_table(
+            add_node_to_table(
                 &arena,
                 root_idx,
                 0,
                 true,
                 "",
-                &global_ctx,
+                global_ctx,
                 margin,
                 &mut main_table,
             );
@@ -272,80 +269,6 @@ impl Nesti {
         *guard = new_line_count;
 
         Ok(())
-    }
-
-    fn add_node_to_table(
-        &self,
-        arena: &[Node],
-        node_idx: usize,
-        depth: usize,
-        is_last: bool,
-        prefix: &str,
-        global_ctx: &GlobalContext,
-        margin: &Margin,
-        table: &mut Table,
-    ) {
-        let node = &arena[node_idx];
-        let segment_str = String::from_utf8_lossy(&node.segment);
-
-        let tree_char = if depth == 0 {
-            ""
-        } else if is_last {
-            LINE_CORNER
-        } else {
-            LINE_JUNCTION
-        };
-
-        let tree_prefix = format!(
-            "{}{}{}{}",
-            " ".repeat(margin.left),
-            prefix,
-            tree_char,
-            segment_str
-        );
-
-        let row = Row::new(
-            StanzaStyles::default(),
-            vec![
-                Cell::new(StanzaStyles::default(), TableContent::Label(tree_prefix)),
-                match (&node.element, &node.context) {
-                    (Some(element), Some(context)) => {
-                        let content = element.content(context.as_ref(), &global_ctx);
-                        let styles = element.styles();
-                        Cell::new(styles.0.clone(), TableContent::Label(content))
-                    }
-                    _ => Cell::new(
-                        StanzaStyles::default().with(TextFg(Palette16::Black)),
-                        TableContent::Label(String::new()),
-                    ),
-                },
-            ],
-        );
-
-        table.push_row(row);
-
-        let child_prefix = if depth == 0 {
-            String::new()
-        } else if is_last {
-            format!("{}    ", prefix)
-        } else {
-            format!("{}{}   ", prefix, LINE_VERTICAL)
-        };
-
-        for (i, &child_idx) in node.children.iter().enumerate() {
-            let is_last_child = i == node.children.len() - 1;
-
-            self.add_node_to_table(
-                arena,
-                child_idx,
-                depth + 1,
-                is_last_child,
-                &child_prefix,
-                global_ctx,
-                margin,
-                table,
-            );
-        }
     }
 
     fn write_to_stdout(
@@ -408,37 +331,6 @@ impl Node {
     }
 }
 
-// Type-erased element trait
-trait DynElement: Send + Sync + std::fmt::Debug {
-    fn content(&self, context: &dyn std::any::Any, global: &GlobalContext) -> String;
-    fn styles(&self) -> Styles;
-}
-
-// Wrapper to implement DynElement for any Element
-struct ElementWrapper<E: Element>(E);
-
-impl<E: Element + Send + Sync> DynElement for ElementWrapper<E>
-where
-    E::Context: 'static,
-{
-    fn content(&self, context: &dyn std::any::Any, global: &GlobalContext) -> String {
-        let ctx = context
-            .downcast_ref::<E::Context>()
-            .expect("Context type mismatch");
-        self.0.content(ctx, global)
-    }
-
-    fn styles(&self) -> Styles {
-        self.0.styles()
-    }
-}
-
-impl<E: Element + Send + Sync> std::fmt::Debug for ElementWrapper<E> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ElementWrapper").finish()
-    }
-}
-
 impl Default for Nesti {
     fn default() -> Self {
         Self {
@@ -464,5 +356,79 @@ impl Default for OutputOptions {
                 left: 3,
             },
         }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn add_node_to_table(
+    arena: &[Node],
+    node_idx: usize,
+    depth: usize,
+    is_last: bool,
+    prefix: &str,
+    global_ctx: &GlobalContext,
+    margin: &Margin,
+    table: &mut Table,
+) {
+    let node = &arena[node_idx];
+    let segment_str = String::from_utf8_lossy(&node.segment);
+
+    let tree_char = if depth == 0 {
+        ""
+    } else if is_last {
+        LINE_CORNER
+    } else {
+        LINE_JUNCTION
+    };
+
+    let tree_prefix = format!(
+        "{}{}{}{}",
+        " ".repeat(margin.left),
+        prefix,
+        tree_char,
+        segment_str
+    );
+
+    let row = Row::new(
+        StanzaStyles::default(),
+        vec![
+            Cell::new(StanzaStyles::default(), TableContent::Label(tree_prefix)),
+            match (&node.element, &node.context) {
+                (Some(element), Some(context)) => {
+                    let content = element.content(context.as_ref(), global_ctx);
+                    let styles = element.styles();
+                    Cell::new(styles.0.clone(), TableContent::Label(content))
+                }
+                _ => Cell::new(
+                    StanzaStyles::default().with(TextFg(Palette16::Black)),
+                    TableContent::Label(String::new()),
+                ),
+            },
+        ],
+    );
+
+    table.push_row(row);
+
+    let child_prefix = if depth == 0 {
+        String::new()
+    } else if is_last {
+        format!("{prefix}    ")
+    } else {
+        format!("{prefix}{LINE_VERTICAL}   ")
+    };
+
+    for (i, &child_idx) in node.children.iter().enumerate() {
+        let is_last_child = i == node.children.len() - 1;
+
+        add_node_to_table(
+            arena,
+            child_idx,
+            depth + 1,
+            is_last_child,
+            &child_prefix,
+            global_ctx,
+            margin,
+            table,
+        );
     }
 }

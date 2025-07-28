@@ -5,8 +5,8 @@ impl Element for bool {
 
     fn content(&self, _ctx: &Self::Context, _global: &super::GlobalContext) -> String {
         match self {
-            true => format!("✓"), // ✔
-            false => format!("🗙"),
+            true => "✓".to_string(), // ✔
+            false => "🗙".to_string(),
         }
     }
 }
