@@ -3,12 +3,9 @@ use std::{sync::LazyLock, thread::sleep, time::Duration};
 
 pub mod style;
 
-mod color;
 mod elements;
-mod stopwatch;
 mod tree;
 
-pub use crate::color::*;
 pub use crate::elements::*;
 pub use crate::tree::*;
 

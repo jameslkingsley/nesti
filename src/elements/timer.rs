@@ -1,4 +1,11 @@
-use humanize_duration::{types::DurationParts, Formatter, Truncate, Unit};
+use std::{
+    sync::LazyLock,
+    time::{Duration, Instant},
+};
+
+use humanize_duration::{prelude::DurationExt, types::DurationParts, Formatter, Truncate, Unit};
+
+use super::Element;
 
 macro_rules! unit {
     ($unit_name:tt, $one:expr) => {
@@ -75,6 +82,8 @@ unit!(Millis, "ms");
 unit!(Micro, "µs");
 unit!(Nano, "ns");
 
+pub struct Stopwatch(pub Truncate);
+
 pub(crate) struct StopwatchFormatter;
 
 impl Formatter for StopwatchFormatter {
@@ -99,5 +108,20 @@ impl Formatter for StopwatchFormatter {
         truncate: Truncate,
     ) -> core::fmt::Result {
         self.format_default(f, parts, truncate)
+    }
+}
+
+impl Element for Stopwatch {
+    type Context = LazyLock<Instant>;
+
+    fn content(&self, ctx: Self::Context) -> String {
+        let uptime = match *ctx {
+            Some(start) => start.elapsed(),
+            None => Duration::ZERO,
+        };
+
+        uptime
+            .human_with_format(self.0, StopwatchFormatter)
+            .to_string()
     }
 }

@@ -1,5 +1,6 @@
 use std::{
     io::{stderr, stdout, Result as IoResult, Write},
+    sync::Arc,
     time::{Duration, Instant},
 };
 
@@ -20,7 +21,7 @@ use stanza::{
     table::{Cell, Col, Content as TableContent, Row, Table},
 };
 
-use crate::{style::StyledContent, elements::Element};
+use crate::{elements::Element, style::StyledContent};
 
 const LINE_VERTICAL: &str = "│";
 const LINE_CORNER: &str = "└─ ";
@@ -58,8 +59,8 @@ pub struct Margin {
 #[derive(Debug)]
 struct Node {
     segment: Vec<u8>,
-    content: Option<StyledContent>,
     children: Vec<usize>,
+    content: Option<StyledContent>,
 }
 
 impl Nesti {
