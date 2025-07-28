@@ -183,7 +183,7 @@ impl FloatLike for f64 {}
 impl<T: IntegerLike> Element for Integer<T> {
     type Context = ();
 
-    fn content(&self, _ctx: &Self::Context) -> String {
+    fn content(&self, _ctx: &Self::Context, _global: &super::GlobalContext) -> String {
         self.0.primitive().to_formatted_string(&Locale::en)
     }
 }
@@ -191,7 +191,7 @@ impl<T: IntegerLike> Element for Integer<T> {
 impl<T: IntegerLike, U: Into<String> + std::fmt::Display> Element for IntegerUnit<T, U> {
     type Context = ();
 
-    fn content(&self, _ctx: &Self::Context) -> String {
+    fn content(&self, _ctx: &Self::Context, _global: &super::GlobalContext) -> String {
         format!(
             "{} {}",
             self.0.primitive().to_formatted_string(&Locale::en),
@@ -203,7 +203,7 @@ impl<T: IntegerLike, U: Into<String> + std::fmt::Display> Element for IntegerUni
 impl<T: FloatLike> Element for Decimal<T> {
     type Context = ();
 
-    fn content(&self, _ctx: &Self::Context) -> String {
+    fn content(&self, _ctx: &Self::Context, _global: &super::GlobalContext) -> String {
         format!("{:.2}", self.0)
     }
 }
@@ -211,7 +211,7 @@ impl<T: FloatLike> Element for Decimal<T> {
 impl<T: FloatLike, U: Into<String> + std::fmt::Display> Element for DecimalUnit<T, U> {
     type Context = ();
 
-    fn content(&self, _ctx: &Self::Context) -> String {
+    fn content(&self, _ctx: &Self::Context, _global: &super::GlobalContext) -> String {
         format!("{:.2} {}", self.0, self.1)
     }
 }

@@ -31,7 +31,7 @@ pub struct Progress {
 impl Element for Progress {
     type Context = ProgressContext;
 
-    fn content(&self, ctx: &Self::Context) -> String {
+    fn content(&self, ctx: &Self::Context, _global: &super::GlobalContext) -> String {
         let percentage = if self.maximum > 0 {
             (self.current as f64 / self.maximum as f64) * 100.0
         } else {

@@ -33,6 +33,7 @@ mod system_info {
 
             nesti("system/uptime", Timer(Nano));
             nesti("system/online", true);
+            nesti("system/offline", false);
             nesti("system/cpu/arch", "amd64");
             nesti(
                 "system/cpu/cores",

@@ -1,4 +1,5 @@
 use super::style::Styles;
+use super::tree::GlobalContext;
 
 mod bool;
 mod color;
@@ -23,7 +24,7 @@ pub use self::timer::*;
 pub trait Element {
     type Context: Default + Send + Sync + 'static;
 
-    fn content(&self, ctx: &Self::Context) -> String;
+    fn content(&self, ctx: &Self::Context, global: &GlobalContext) -> String;
 
     fn styles(&self) -> Styles {
         Styles::new()

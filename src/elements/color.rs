@@ -11,8 +11,8 @@ macro_rules! color_struct {
         impl<T: Element> Element for $name<T> {
             type Context = T::Context;
 
-            fn content(&self, ctx: &Self::Context) -> String {
-                self.0.content(ctx)
+            fn content(&self, ctx: &Self::Context, global: &super::GlobalContext) -> String {
+                self.0.content(ctx, global)
             }
 
             fn styles(&self) -> Styles {

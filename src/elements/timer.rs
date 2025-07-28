@@ -1,5 +1,3 @@
-use std::time::Instant;
-
 use humanize_duration::{prelude::DurationExt, types::DurationParts, Formatter, Truncate, Unit};
 
 use super::Element;
@@ -109,20 +107,11 @@ impl Formatter for TimerFormatter {
     }
 }
 
-#[derive(Debug)]
-pub struct TimerContext(Instant);
-
-impl Default for TimerContext {
-    fn default() -> Self {
-        TimerContext(Instant::now())
-    }
-}
-
 impl Element for Timer {
-    type Context = TimerContext;
+    type Context = ();
 
-    fn content(&self, ctx: &Self::Context) -> String {
-        let uptime = ctx.0.elapsed();
+    fn content(&self, _ctx: &Self::Context, global: &super::GlobalContext) -> String {
+        let uptime = global.start.elapsed();
 
         uptime.human_with_format(self.0, TimerFormatter).to_string()
     }

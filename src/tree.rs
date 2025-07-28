@@ -37,8 +37,13 @@ pub struct Nesti {
     arena: RwLock<Vec<Node>>,
     roots: RwLock<Vec<usize>>,
     last_line_count: RwLock<usize>,
-    start: RwLock<Instant>,
-    delta: RwLock<Instant>,
+    context: GlobalContext,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct GlobalContext {
+    pub start: Instant,
+    pub delta: Duration,
 }
 
 #[derive(Debug, Clone)]
@@ -198,10 +203,7 @@ impl Nesti {
     }
 
     pub fn render(&self, margin: &Margin) -> String {
-        let uptime = self.start.read().elapsed();
-        let mut delta = self.delta.write();
-        let delta_time = delta.elapsed();
-        *delta = Instant::now();
+        let global_ctx = &self.context;
 
         let arena = self.arena.read();
         let roots = self.roots.read();
@@ -226,8 +228,7 @@ impl Nesti {
                 0,
                 true,
                 "",
-                uptime,
-                delta_time,
+                &global_ctx,
                 margin,
                 &mut main_table,
             );
@@ -280,8 +281,7 @@ impl Nesti {
         depth: usize,
         is_last: bool,
         prefix: &str,
-        uptime: Duration,
-        delta: Duration,
+        global_ctx: &GlobalContext,
         margin: &Margin,
         table: &mut Table,
     ) {
@@ -310,7 +310,7 @@ impl Nesti {
                 Cell::new(StanzaStyles::default(), TableContent::Label(tree_prefix)),
                 match (&node.element, &node.context) {
                     (Some(element), Some(context)) => {
-                        let content = element.content(context.as_ref());
+                        let content = element.content(context.as_ref(), &global_ctx);
                         let styles = element.styles();
                         Cell::new(styles.0.clone(), TableContent::Label(content))
                     }
@@ -341,8 +341,7 @@ impl Nesti {
                 depth + 1,
                 is_last_child,
                 &child_prefix,
-                uptime,
-                delta,
+                global_ctx,
                 margin,
                 table,
             );
@@ -411,7 +410,7 @@ impl Node {
 
 // Type-erased element trait
 trait DynElement: Send + Sync + std::fmt::Debug {
-    fn content(&self, context: &dyn std::any::Any) -> String;
+    fn content(&self, context: &dyn std::any::Any, global: &GlobalContext) -> String;
     fn styles(&self) -> Styles;
 }
 
@@ -422,11 +421,11 @@ impl<E: Element + Send + Sync> DynElement for ElementWrapper<E>
 where
     E::Context: 'static,
 {
-    fn content(&self, context: &dyn std::any::Any) -> String {
+    fn content(&self, context: &dyn std::any::Any, global: &GlobalContext) -> String {
         let ctx = context
             .downcast_ref::<E::Context>()
             .expect("Context type mismatch");
-        self.0.content(ctx)
+        self.0.content(ctx, global)
     }
 
     fn styles(&self) -> Styles {
@@ -446,8 +445,10 @@ impl Default for Nesti {
             arena: RwLock::default(),
             roots: RwLock::default(),
             last_line_count: RwLock::default(),
-            start: RwLock::new(Instant::now()),
-            delta: RwLock::new(Instant::now()),
+            context: GlobalContext {
+                start: Instant::now(),
+                delta: Duration::ZERO,
+            },
         }
     }
 }
