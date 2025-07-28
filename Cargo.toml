@@ -14,3 +14,4 @@ num-format = "0.4.4"
 bytesize = "2.0.1"
 sysinfo = { version = "0.30", optional = true }
 humanize-duration = "0.0.7"
+bevy_ecs = "0.16.1"

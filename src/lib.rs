@@ -3,6 +3,7 @@ use std::{sync::LazyLock, thread::sleep, time::Duration};
 
 pub mod style;
 
+pub mod core;
 mod elements;
 mod tree;
 
