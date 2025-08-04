@@ -44,6 +44,10 @@ pub struct Content(pub String);
 #[component(storage = "SparseSet")]
 pub struct Style(pub Styles);
 
+#[derive(Component)]
+#[component(storage = "SparseSet")]
+pub struct NeedsTick;
+
 pub trait Element {
     fn spawn(&self, entity: &mut EntityWorldMut, style_override: Option<Styles>);
 
@@ -56,7 +60,7 @@ impl Nesti {
     pub fn put<P, E>(&self, path: P, element: E)
     where
         P: Into<String>,
-        E: Element,
+        E: Element + Send + Sync + 'static,
     {
         let path = path.into();
         let mut world = self.world.write();
@@ -73,10 +77,22 @@ impl Nesti {
             // Entity already exists at path
             let mut ent = world.entity_mut(entity);
             element.tick(&mut ent, None);
+            
+            // Update the tick function
+            let tick_fn = Box::new(move |entity: &mut EntityWorldMut| {
+                element.tick(entity, None);
+            });
+            ent.insert(TickFn(tick_fn));
         } else {
             let insertion_order = self.insertion_counter.fetch_add(1, Ordering::SeqCst);
             let mut ent = world.spawn((Path(path), InsertionOrder(insertion_order)));
             element.spawn(&mut ent, None);
+            
+            // Store the tick function for future calls
+            let tick_fn = Box::new(move |entity: &mut EntityWorldMut| {
+                element.tick(entity, None);
+            });
+            ent.insert(TickFn(tick_fn));
         }
     }
 
@@ -106,6 +122,32 @@ impl Nesti {
     pub fn flush(&self) -> Result<(), std::io::Error> {
         let mut world = self.world.write();
         world.flush();
+
+        // Execute all tick functions before rendering
+        let entities_with_tick: Vec<Entity> = {
+            let mut query = world.query::<(Entity, &TickFn)>();
+            query.iter(&world).map(|(e, _)| e).collect()
+        };
+
+        for entity in entities_with_tick {
+            let tick_fn = {
+                let ent = world.entity(entity);
+                if let Some(tick_component) = ent.get::<TickFn>() {
+                    // Clone the function pointer
+                    let f = &tick_component.0;
+                    Some(f as *const dyn Fn(&mut EntityWorldMut) as usize)
+                } else {
+                    None
+                }
+            };
+
+            if let Some(fn_ptr) = tick_fn {
+                let mut ent = world.entity_mut(entity);
+                // Reconstruct the function reference
+                let f = unsafe { &*(fn_ptr as *const dyn Fn(&mut EntityWorldMut)) };
+                f(&mut ent);
+            }
+        }
 
         let content = self.render(&mut world);
 
