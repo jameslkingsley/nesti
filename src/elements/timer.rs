@@ -86,10 +86,18 @@ unit!(NanoFormat, "ns");
 #[derive(Debug)]
 pub struct Timer(pub Truncate);
 
+#[derive(Debug)]
+pub struct EndTimer;
+
 pub(crate) struct TimerFormatter;
 
 #[derive(Component, Debug)]
-pub struct TimeComponent(Instant);
+pub struct TimeComponent(pub Instant);
+
+#[derive(Component, Debug)]
+pub struct StoppedTimer {
+    pub elapsed: Duration,
+}
 
 impl Deref for TimeComponent {
     type Target = Instant;
@@ -126,10 +134,13 @@ impl Formatter for TimerFormatter {
 
 impl Element for Timer {
     fn spawn(&self, entity: &mut EntityWorldMut, style_override: Option<Styles>) {
-        if self.0 == Truncate::Millis {
-            println!("spawning timer");
+        // If the timer was stopped, restart it
+        if entity.contains::<StoppedTimer>() {
+            entity.remove::<StoppedTimer>();
+            entity.insert(TimeComponent(Instant::now()));
+        } else {
+            entity.insert_if_new(TimeComponent(Instant::now()));
         }
-        entity.insert_if_new(TimeComponent(Instant::now()));
 
         entity.insert(Content(
             Duration::ZERO
@@ -143,9 +154,13 @@ impl Element for Timer {
     }
 
     fn tick(&self, entity: &mut EntityWorldMut, style_override: Option<Styles>) {
-        if self.0 == Truncate::Millis {
-            println!("ticking timer");
+        // If the timer was stopped, restart it
+        if entity.contains::<StoppedTimer>() {
+            entity.remove::<StoppedTimer>();
+            entity.insert(TimeComponent(Instant::now()));
         }
+        
+        // Display the current elapsed time
         if let Some(time_component) = entity.get::<TimeComponent>() {
             let uptime = time_component.elapsed();
             let content = uptime.human_with_format(self.0, TimerFormatter).to_string();
@@ -155,5 +170,17 @@ impl Element for Timer {
         if let Some(style) = style_override {
             entity.insert(Style(style));
         }
+    }
+}
+
+impl Element for EndTimer {
+    fn spawn(&self, entity: &mut EntityWorldMut, _style_override: Option<Styles>) {
+        // If there's an active timer, stop it and freeze the elapsed time
+        if let Some(time_component) = entity.get::<TimeComponent>() {
+            let elapsed = time_component.elapsed();
+            entity.insert(StoppedTimer { elapsed });
+            entity.remove::<TimeComponent>();
+        }
+        // If already stopped, do nothing
     }
 }

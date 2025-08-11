@@ -46,7 +46,7 @@ pub struct Style(pub Styles);
 
 #[derive(Component)]
 #[component(storage = "SparseSet")]
-pub struct NeedsTick;
+pub struct ElementComponent(pub Box<dyn Element + Send + Sync>);
 
 pub trait Element {
     fn spawn(&self, entity: &mut EntityWorldMut, style_override: Option<Styles>);
@@ -54,6 +54,12 @@ pub trait Element {
     fn tick(&self, entity: &mut EntityWorldMut, style_override: Option<Styles>) {
         self.spawn(entity, style_override);
     }
+}
+
+// Dummy element used temporarily during ticking
+struct DummyElement;
+impl Element for DummyElement {
+    fn spawn(&self, _entity: &mut EntityWorldMut, _style_override: Option<Styles>) {}
 }
 
 impl Nesti {
@@ -64,6 +70,7 @@ impl Nesti {
     {
         let path = path.into();
         let mut world = self.world.write();
+        let element_ptr = Box::new(element) as Box<dyn Element + Send + Sync>;
 
         let entity = {
             let mut query = world.query::<(Entity, &Path)>();
@@ -76,23 +83,17 @@ impl Nesti {
         if let Some(entity) = entity {
             // Entity already exists at path
             let mut ent = world.entity_mut(entity);
-            element.tick(&mut ent, None);
-            
-            // Update the tick function
-            let tick_fn = Box::new(move |entity: &mut EntityWorldMut| {
-                element.tick(entity, None);
-            });
-            ent.insert(TickFn(tick_fn));
+            element_ptr.tick(&mut ent, None);
+
+            // Store the element instance for future ticking
+            ent.insert(ElementComponent(element_ptr));
         } else {
             let insertion_order = self.insertion_counter.fetch_add(1, Ordering::SeqCst);
             let mut ent = world.spawn((Path(path), InsertionOrder(insertion_order)));
-            element.spawn(&mut ent, None);
-            
-            // Store the tick function for future calls
-            let tick_fn = Box::new(move |entity: &mut EntityWorldMut| {
-                element.tick(entity, None);
-            });
-            ent.insert(TickFn(tick_fn));
+            element_ptr.spawn(&mut ent, None);
+
+            // Store the element instance for future ticking
+            ent.insert(ElementComponent(element_ptr));
         }
     }
 
@@ -123,30 +124,26 @@ impl Nesti {
         let mut world = self.world.write();
         world.flush();
 
-        // Execute all tick functions before rendering
-        let entities_with_tick: Vec<Entity> = {
-            let mut query = world.query::<(Entity, &TickFn)>();
-            query.iter(&world).map(|(e, _)| e).collect()
-        };
+        // Tick all elements that have instances stored
+        // We need to collect entities first to avoid borrowing conflicts
+        let mut entities_to_tick: Vec<(Entity, Box<dyn Element + Send + Sync>)> = Vec::new();
 
-        for entity in entities_with_tick {
-            let tick_fn = {
-                let ent = world.entity(entity);
-                if let Some(tick_component) = ent.get::<TickFn>() {
-                    // Clone the function pointer
-                    let f = &tick_component.0;
-                    Some(f as *const dyn Fn(&mut EntityWorldMut) as usize)
-                } else {
-                    None
-                }
-            };
-
-            if let Some(fn_ptr) = tick_fn {
-                let mut ent = world.entity_mut(entity);
-                // Reconstruct the function reference
-                let f = unsafe { &*(fn_ptr as *const dyn Fn(&mut EntityWorldMut)) };
-                f(&mut ent);
+        {
+            let mut query = world.query::<(Entity, &mut ElementComponent)>();
+            for (entity, mut element_instance) in query.iter_mut(&mut world) {
+                // Take ownership of the element temporarily
+                let element = std::mem::replace(&mut element_instance.0, Box::new(DummyElement));
+                entities_to_tick.push((entity, element));
             }
+        }
+
+        // Now tick each element and put them back
+        for (entity, element) in entities_to_tick {
+            let mut ent = world.entity_mut(entity);
+            element.tick(&mut ent, None);
+
+            // Put the element back
+            ent.insert(ElementComponent(element));
         }
 
         let content = self.render(&mut world);

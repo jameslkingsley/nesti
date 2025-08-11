@@ -15,7 +15,7 @@ static GLOBAL_NESTI: LazyLock<Nesti> = LazyLock::new(Nesti::default);
 pub fn nesti<P, E>(path: P, element: E)
 where
     P: Into<String>,
-    E: Element,
+    E: Element + Send + Sync + 'static,
 {
     GLOBAL_NESTI.put(path, element);
 }
@@ -31,6 +31,6 @@ pub fn nesti_flush() -> Result<(), Error> {
 pub fn nesti_task() {
     loop {
         GLOBAL_NESTI.flush().unwrap();
-        sleep(Duration::from_millis(500));
+        sleep(Duration::from_millis(32));
     }
 }

@@ -27,11 +27,14 @@ mod system_info {
                 let key: u16 = rng.random();
                 nesti(format!("system/timers/{}", key), Timer(Millis));
                 timers += 1;
+                sleep(Duration::from_millis(1000));
             }
 
             nesti("system/uptime", Timer(Nano));
-            nesti("system/online", true);
-            nesti("system/offline", false);
+
+            nesti("system/online", rng.random_bool(0.5));
+            nesti("system/offline", rng.random_bool(0.5));
+
             nesti("system/cpu/arch", "amd64");
             nesti(
                 "system/cpu/cores",
