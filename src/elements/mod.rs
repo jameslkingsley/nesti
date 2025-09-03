@@ -12,7 +12,7 @@ mod timer;
 mod vector;
 
 pub use self::color::*;
-pub use self::number::*;
+pub use self::number::{Integer, IntegerUnit, IntegerDelta, Decimal, DecimalUnit, DecimalDelta, NumericValue};
 pub use self::progress::*;
 pub use self::size::*;
 pub use self::text::*;
